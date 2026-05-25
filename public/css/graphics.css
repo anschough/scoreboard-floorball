@@ -79,15 +79,28 @@ html, body {
      10  – matchup + intermission (fullskärms paus-/inför-skylt)
       5  – lineup, table, fixtures (centrerade fullskärms-grafiker)
 ═══ */
-#scoreboard {
+/* Flex-rad runt scoreboarden – håller utvisningarna dockade intill dess
+   kanter oavsett lagnamn-längd. Wrappern är fixed top:24 och fyller hela
+   bredden så att justify-content:center centrerar scoreboarden + penalties
+   som ett gemensamt block. */
+.scoreboard-row {
   position: fixed;
   top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 24px;
+  pointer-events: none;
+}
 
+#scoreboard {
   display: flex;
   align-items: stretch;
+  pointer-events: auto;
 
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -124,7 +137,7 @@ html, body {
 /* Dolt läge – glider upp och tonas */
 #scoreboard.scoreboard-hidden {
   opacity: 0;
-  transform: translateX(-50%) translateY(-44px) scale(0.97);
+  transform: translateY(-44px) scale(0.97);
   pointer-events: none;
   transition: opacity 0.4s var(--ease-in),
               transform 0.4s var(--ease-in);
@@ -257,6 +270,129 @@ html, body {
 @keyframes clockColonPulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.22; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UTVISNINGAR – fästa under scoreboarden
+   Glassmorf-baserade rutor i samma stil som scoreboarden, men med tydlig
+   röd vänster-kant + röd siffertext så det är uppenbart att laget spelar
+   i underläge. Animeras in när en utvisning läggs till och ut när den
+   rensas eller når noll.
+═══ */
+:root {
+  --penalty-red:      #ff4d4d;
+  --penalty-red-soft: #ff8d8d;
+  --penalty-red-rgb:  255, 77, 77;
+}
+
+.penalty-stack {
+  /* Sitter som flex-syskon till scoreboarden → dockas alltid intill dess
+     kanter via .scoreboard-row. Stack:en växer neråt. */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none; /* OBS Browser Source: rena visuals */
+  /* Synkronisera med scoreboarden – när den döljs hänger vi inte kvar */
+  transition: opacity 0.4s var(--ease-out);
+}
+
+.penalty-stack-home { align-items: flex-end;   }
+.penalty-stack-away { align-items: flex-start; }
+
+/* Penalty-box – glasmorf-bas + röd accent
+   Format: liten "UTVISNING"-etikett + tid. Tid är dominerande visuellt. */
+.penalty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 16px 10px 14px;
+  min-width: 130px;
+
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-left: 3px solid var(--penalty-red);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45),
+              0 0 18px rgba(var(--penalty-red-rgb), 0.18),
+              0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Borta-boxar speglas så röd kant ligger på utsidan (höger) och text
+   linjeras högerställd – broadcasterns klassiska "speglade rutor" */
+.penalty-stack-away .penalty-box {
+  align-items: flex-end;
+  border-left: none;
+  border-right: 3px solid var(--penalty-red);
+  padding: 10px 14px 10px 16px;
+}
+
+.penalty-stack-home .penalty-box {
+  animation: penaltyBoxInLeft 0.42s var(--ease-snap) both;
+}
+.penalty-stack-away .penalty-box {
+  animation: penaltyBoxInRight 0.42s var(--ease-snap) both;
+}
+
+/* Klass som triggar mjuk ut-animation innan elementet tas bort i JS */
+.penalty-box.is-removing {
+  animation: penaltyBoxOut 0.32s var(--ease-in) forwards;
+  pointer-events: none;
+}
+
+@keyframes penaltyBoxInLeft {
+  from { opacity: 0; transform: translateX(-22px) scale(0.94); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes penaltyBoxInRight {
+  from { opacity: 0; transform: translateX(22px) scale(0.94); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes penaltyBoxOut {
+  to {
+    opacity: 0;
+    transform: scale(0.88);
+    max-height: 0;
+    margin-top: -8px;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+  }
+}
+
+.penalty-label {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--penalty-red);
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.penalty-time {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--penalty-red-soft);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 0 14px rgba(var(--penalty-red-rgb), 0.55),
+               0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* När scoreboarden är dold döljs även utvisningsrutorna (de hör ihop).
+   :has-selektor används eftersom stackarna nu är syskon till scoreboarden
+   inuti samma .scoreboard-row. */
+.scoreboard-row:has(#scoreboard.scoreboard-hidden) .penalty-stack {
+  opacity: 0;
+  pointer-events: none;
 }
 
 
@@ -1250,7 +1386,9 @@ html, body {
 
 .matchup-meta-label {
   font-family: var(--font-display);
-  font-size: 1rem;
+  /* Matchar matchup-meta-value-storleken så ROTEBROHALLEN, MATCHSTART
+     och 19:15 visuellt har samma höjd i meta-raden. */
+  font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: 0.32em;
   color: var(--sollentuna-lb-500);

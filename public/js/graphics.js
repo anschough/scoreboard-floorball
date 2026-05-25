@@ -36,6 +36,10 @@ const elMatchupCompetition = document.getElementById('matchupCompetition');
 const elLineupHomeLeadersList = document.getElementById('lineupHomeLeaders');
 const elLineupAwayLeadersList = document.getElementById('lineupAwayLeaders');
 
+// Utvisningar (penalties)
+const elPenaltiesHome = document.getElementById('penalties-home');
+const elPenaltiesAway = document.getElementById('penalties-away');
+
 // Intermission/Pausvila
 const elIntermission        = document.getElementById('intermission-graphic');
 const elIntermissionHomeName = document.getElementById('intermissionHomeName');
@@ -243,6 +247,75 @@ function refreshIntermissionWaiting() {
     computeNextPeriodLabel(elPeriod.textContent);
 }
 
+/**
+ * Räknar ut den största font-size ett lagnamn kan ha utan att rinna över
+ * logon. Långa namn (t.ex. "ROSERSBERG ARLANDA IBK") överskuggar annars
+ * logon eftersom .matchup-team-name har white-space: nowrap och min-width: 0
+ * – då rinner texten visuellt över logon istället för att krympa span:en.
+ *
+ * Returnerar { baseSize, desiredSize } i px. desiredSize === baseSize om
+ * namnet redan får plats med CSS-default.
+ */
+function measureTeamNameFit(nameEl) {
+  if (!nameEl) return null;
+  // Nollställ ev. tidigare skalning så vi alltid mäter mot CSS-baseline
+  nameEl.style.fontSize = '';
+
+  const teamEl = nameEl.parentElement;
+  if (!teamEl) return null;
+
+  const logoEl = teamEl.querySelector('.matchup-logo-wrap, .intermission-logo-wrap');
+  const teamWidth = teamEl.clientWidth;
+  const logoWidth = logoEl ? logoEl.getBoundingClientRect().width : 0;
+  const teamStyles = getComputedStyle(teamEl);
+  const gap = parseFloat(teamStyles.columnGap || teamStyles.gap || '0') || 0;
+
+  const available = teamWidth - logoWidth - gap;
+  const natural = nameEl.scrollWidth;
+  const baseSize = parseFloat(getComputedStyle(nameEl).fontSize);
+
+  if (available <= 0 || natural <= available) {
+    return { baseSize, desiredSize: baseSize };
+  }
+  // 0.97 = liten säkerhetsmarginal så texten inte snuddar logon
+  const scaled = baseSize * (available / natural) * 0.97;
+  return { baseSize, desiredSize: scaled };
+}
+
+/**
+ * Skalar ett par av lagnamn (hemma + borta) symmetriskt: båda får samma
+ * font-size, satt till den mindre av de två "önskade" storlekarna. Det
+ * ger en balanserad broadcast-look där bortalagets långa namn drar med
+ * sig hemmalagets storlek nedåt om det behövs.
+ */
+function fitTeamNamePair(homeEl, awayEl) {
+  const home = measureTeamNameFit(homeEl);
+  const away = measureTeamNameFit(awayEl);
+  if (!home && !away) return;
+
+  // Båda lagen ska aldrig visas större än CSS-baseline – ta minsta önskad
+  const targets = [home, away].filter(Boolean).map(m => m.desiredSize);
+  const baseSize = (home || away).baseSize;
+  const finalSize = Math.min(baseSize, ...targets);
+
+  // Endast applicera om vi faktiskt behöver krympa – annars rensa override
+  // så CSS-default får styra (rem-baserat, följer ev. responsiva regler).
+  if (finalSize >= baseSize - 0.5) {
+    if (homeEl) homeEl.style.fontSize = '';
+    if (awayEl) awayEl.style.fontSize = '';
+  } else {
+    const px = `${finalSize.toFixed(2)}px`;
+    if (homeEl) homeEl.style.fontSize = px;
+    if (awayEl) awayEl.style.fontSize = px;
+  }
+}
+
+/** Skalar matchup- och intermission-radernas lagnamn till matchande storlekar */
+function fitAllTeamNames() {
+  fitTeamNamePair(elMatchupHomeName, elMatchupAwayName);
+  fitTeamNamePair(elIntermissionHomeName, elIntermissionAwayName);
+}
+
 /** Returnerar matchstart-tiden som "HH:MM" för matchup-skylten */
 function formatMatchStart(iso) {
   if (!iso) return '—';
@@ -370,6 +443,60 @@ function renderTable(rows) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// UTVISNINGAR (PENALTIES)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** "M:SS" format för en utvisnings remaining-tid (i sekunder) */
+function formatPenaltyTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${m}:${String(ss).padStart(2, '0')}`;
+}
+
+/**
+ * Diff-rendering: skapa nya rutor med entry-animation, uppdatera tiden på
+ * befintliga, och animera ut rutor som inte längre finns i state innan de
+ * tas bort. Sparar DOM-flicker när tiden tickar sekund för sekund.
+ */
+function renderPenaltyStack(containerEl, penalties) {
+  if (!containerEl) return;
+  const incomingIds = new Set(penalties.map(p => String(p.id)));
+
+  // Animera ut element som inte längre är med
+  Array.from(containerEl.children).forEach(box => {
+    if (box.classList.contains('is-removing')) return;
+    if (!incomingIds.has(box.dataset.id)) {
+      box.classList.add('is-removing');
+      box.addEventListener('animationend', () => box.remove(), { once: true });
+    }
+  });
+
+  // Skapa eller uppdatera kvarvarande
+  penalties.forEach(p => {
+    let box = containerEl.querySelector(
+      `.penalty-box[data-id="${p.id}"]:not(.is-removing)`
+    );
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'penalty-box';
+      box.dataset.id = String(p.id);
+      box.innerHTML = `
+        <span class="penalty-label">UTVISNING</span>
+        <span class="penalty-time"></span>`;
+      containerEl.appendChild(box);
+    }
+    box.querySelector('.penalty-time').textContent = formatPenaltyTime(p.remaining);
+  });
+}
+
+function applyPenalties(home, away) {
+  renderPenaltyStack(elPenaltiesHome, home || []);
+  renderPenaltyStack(elPenaltiesAway, away || []);
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
 // SOCKET-LYSSNARE
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -429,6 +556,15 @@ socket.on('stateUpdate', (state) => {
   elIntermissionAwayName.textContent = state.teamB || 'BORTA';
   renderLogo(elIntermissionHomeLogo, state.homeLogo, state.teamA);
   renderLogo(elIntermissionAwayLogo, state.awayLogo, state.teamB);
+
+  // Auto-shrink långa lagnamn så de ryms i grid-cellen utan radbrytning.
+  // Kör synkront (mätningen av scrollWidth triggar reflow så vi får färska
+  // värden direkt) och dessutom i nästa frame för fall där logo-bilder
+  // eller webfonts byts in efteråt och påverkar bredden. rAF används inte
+  // ensamt – det är throttlat i dolda flikar (OBS-källor är synliga så
+  // där fungerar det, men sync-anropet gör oss robusta även annars).
+  fitAllTeamNames();
+  requestAnimationFrame(fitAllTeamNames);
   // Använd numeriska state.period direkt – computeNextPeriodLabel hanterar
   // både number och string så det är robust mot framtida förändringar.
   elIntermissionWaiting.textContent = computeNextPeriodLabel(state.period);
@@ -436,6 +572,14 @@ socket.on('stateUpdate', (state) => {
   // Ledare för uppställningarna
   renderLeaders(elLineupHomeLeadersList, state.lineupHomeLeaders || []);
   renderLeaders(elLineupAwayLeadersList, state.lineupAwayLeaders || []);
+
+  // Utvisningar – hydrera från full state vid connect/reload, sen sköter
+  // penaltiesUpdate sekund-för-sekund-tickande utan att rebuild:a DOM.
+  applyPenalties(state.penaltiesHome, state.penaltiesAway);
+});
+
+socket.on('penaltiesUpdate', ({ penaltiesHome, penaltiesAway }) => {
+  applyPenalties(penaltiesHome, penaltiesAway);
 });
 
 socket.on('clockTick',   ({ clock })   => { renderClock(clock); });
@@ -464,3 +608,11 @@ socket.on('graphicState', ({ activeGraphic }) => {
 socket.on('switchGraphic', ({ to }) => {
   switchTo(to);
 });
+
+// Räkna om team-namnens auto-shrink när viewport ändras (OBS-källans
+// storlek, fönsterstorlek) och när webfonts laddats klart (annars mäter
+// vi mot fallback-fonten och kan ge fel skalning).
+window.addEventListener('resize', () => requestAnimationFrame(fitAllTeamNames));
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => requestAnimationFrame(fitAllTeamNames));
+}

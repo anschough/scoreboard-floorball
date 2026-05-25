@@ -43,6 +43,14 @@ const periodDisplay  = document.getElementById('periodDisplay');
 const btnPeriodNext  = document.getElementById('btnPeriodNext');
 const btnPeriodReset = document.getElementById('btnPeriodReset');
 
+// Utvisningar
+const penaltyHomeList  = document.getElementById('penaltyHomeList');
+const penaltyAwayList  = document.getElementById('penaltyAwayList');
+const penaltyHomeCount = document.getElementById('penaltyHomeCount');
+const penaltyAwayCount = document.getElementById('penaltyAwayCount');
+const inputPenaltyHomeJersey = document.getElementById('inputPenaltyHomeJersey');
+const inputPenaltyAwayJersey = document.getElementById('inputPenaltyAwayJersey');
+
 // Flik 2 – Hämta all data (en URL → match + tabell)
 const urlMatchAll       = document.getElementById('urlMatchAll');
 const btnFetchAll       = document.getElementById('btnFetchAll');
@@ -110,6 +118,99 @@ btnPeriodNext.addEventListener('click',  () => socket.emit('periodNext'));
 btnPeriodReset.addEventListener('click', () => socket.emit('periodReset'));
 
 // ════════════════════════════════════════════════════════════════════════════
+// UTVISNINGAR
+// ════════════════════════════════════════════════════════════════════════════
+
+/** "M:SS" format för utvisnings-nedräkning (1:54, 0:08, 4:59) */
+function formatPenaltyTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${m}:${String(ss).padStart(2, '0')}`;
+}
+
+/**
+ * Renderar en utvisningslista. Diffar mot DOM så befintliga rader bara
+ * uppdaterar text (ingen flash) och borttagna rader animeras ut innan
+ * de tas bort. Nya rader animeras in via CSS .penalty-row.
+ */
+function renderPenaltyList(listEl, penalties) {
+  const incomingIds = new Set(penalties.map(p => String(p.id)));
+
+  // Steg 1: ta bort rader som inte längre finns i state
+  Array.from(listEl.children).forEach(li => {
+    if (li.classList.contains('is-removing')) return;
+    if (!incomingIds.has(li.dataset.id)) {
+      li.classList.add('is-removing');
+      li.addEventListener('animationend', () => li.remove(), { once: true });
+    }
+  });
+
+  // Steg 2: skapa eller uppdatera rader för varje aktiv utvisning
+  penalties.forEach(p => {
+    let li = listEl.querySelector(`li[data-id="${p.id}"]:not(.is-removing)`);
+    if (!li) {
+      li = document.createElement('li');
+      li.className = 'penalty-row';
+      li.dataset.id = String(p.id);
+      li.innerHTML = `
+        <span class="penalty-row-jersey"></span>
+        <span class="penalty-row-time"></span>
+        <button class="btn-penalty-remove" title="Ta bort utvisning" aria-label="Ta bort utvisning">×</button>`;
+      listEl.appendChild(li);
+    }
+    li.querySelector('.penalty-row-jersey').textContent = p.jersey ? `#${p.jersey}` : '';
+    li.querySelector('.penalty-row-time').textContent   = formatPenaltyTime(p.remaining);
+  });
+}
+
+function updatePenaltyCounts(home, away) {
+  const fmt = (n) => `${n} aktiv${n === 1 ? '' : 'a'}`;
+  penaltyHomeCount.textContent = fmt(home.length);
+  penaltyAwayCount.textContent = fmt(away.length);
+}
+
+function applyPenalties(home, away) {
+  renderPenaltyList(penaltyHomeList, home || []);
+  renderPenaltyList(penaltyAwayList, away || []);
+  updatePenaltyCounts(home || [], away || []);
+}
+
+// Klick-delegering för +2/+5-knappar (oavsett vilket lag)
+document.querySelectorAll('.btn-penalty').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const team    = btn.dataset.team;
+    const minutes = parseInt(btn.dataset.minutes, 10);
+    const jerseyInput = team === 'home' ? inputPenaltyHomeJersey : inputPenaltyAwayJersey;
+    const jersey = jerseyInput.value.trim();
+    socket.emit('penaltyAdd', { team, minutes, jersey });
+    // Töm tröjnummer-fältet så nästa utvisning börjar tomt
+    jerseyInput.value = '';
+  });
+});
+
+// Klick-delegering för röd X-knapp (eventet bubblar upp till listan)
+[penaltyHomeList, penaltyAwayList].forEach(list => {
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-penalty-remove');
+    if (!btn) return;
+    const li = btn.closest('li.penalty-row');
+    if (!li) return;
+    const team = list === penaltyHomeList ? 'home' : 'away';
+    const id   = parseInt(li.dataset.id, 10);
+    if (!Number.isFinite(id)) return;
+    socket.emit('penaltyRemove', { team, id });
+  });
+});
+
+// Riktade penalty-uppdateringar (kommer varje sekund från klock-loopen
+// när utvisningar är aktiva). Använder samma render som stateUpdate så
+// inga element rebuildas i onödan.
+socket.on('penaltiesUpdate', ({ penaltiesHome, penaltiesAway }) => {
+  applyPenalties(penaltiesHome, penaltiesAway);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // AKTIV GRAFIK-INDIKATOR
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -170,6 +271,11 @@ socket.on('stateUpdate', (state) => {
   // Hydrera previews från server-state. Datan finns kvar i matchState mellan
   // sid-omladdningar, så previews dyker upp automatiskt om data finns.
   hydratePreviewsFromState(state);
+
+  // Utvisningar – speglar server-state. Kallas vid initial connect och varje
+  // gång state ändras icke-relaterat till klocktick (penaltiesUpdate sköter
+  // sekund-för-sekund-uppdateringen så den här gör ingen flash).
+  applyPenalties(state.penaltiesHome, state.penaltiesAway);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });

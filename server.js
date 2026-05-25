@@ -42,8 +42,18 @@ let matchState = {
   venue: '',
   homeLogo: '',
   awayLogo: '',
-  matchStart: ''         // ISO datetime, t.ex. "2026-03-15T16:00:00"
+  matchStart: '',        // ISO datetime, t.ex. "2026-03-15T16:00:00"
+  // Utvisningar – synkade med matchklockan. Varje objekt:
+  //   { id: number, duration: number, remaining: number, jersey?: string }
+  // duration + remaining anges i sekunder. När remaining når 0 tas
+  // utvisningen automatiskt bort av klock-loopen.
+  penaltiesHome: [],
+  penaltiesAway: []
 };
+
+// Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
+// Date.now() kan ge när två utvisningar läggs till på samma millisekund.
+let penaltySeq = 0;
 
 // activeGraphic styr vad som visas på skärmen.
 // Möjliga värden: 'scoreboard' | 'lineupHome' | 'lineupAway' | 'table' | 'none'
@@ -69,7 +79,43 @@ function startClock() {
     elapsedSeconds++;
     matchState.clock = formatTime(elapsedSeconds);
     io.emit('clockTick', { clock: matchState.clock });
+
+    // Tick utvisningarna i samma loop. När klockan pausas (clearInterval)
+    // pausas utvisningarna automatiskt – det är hela poängen med en
+    // gemensam loop.
+    tickPenalties();
   }, 1000);
+}
+
+// ── Utvisningslogik ──────────────────────────────────────────────────────────
+// Säker array-mutation: iterera BAKIFRÅN och splice. Då kan vi ta bort
+// element under iterationen utan att indexen skiftar – två utvisningar som
+// går ut på samma tick hanteras korrekt. broadcastIfChanged säkerställer att
+// vi bara pushar state när något faktiskt ändrats (annars varje sekund).
+function tickPenaltyArray(arr) {
+  let changed = false;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    arr[i].remaining -= 1;
+    if (arr[i].remaining <= 0) {
+      arr.splice(i, 1);
+      changed = true;
+    } else {
+      // remaining ändrades – broadcasta så grafiken kan rendera siffrorna.
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function tickPenalties() {
+  const a = tickPenaltyArray(matchState.penaltiesHome);
+  const b = tickPenaltyArray(matchState.penaltiesAway);
+  if (a || b) {
+    io.emit('penaltiesUpdate', {
+      penaltiesHome: matchState.penaltiesHome,
+      penaltiesAway: matchState.penaltiesAway
+    });
+  }
 }
 
 function pauseClock() {
@@ -114,8 +160,11 @@ function resetMatchState() {
     venue: '',
     homeLogo: '',
     awayLogo: '',
-    matchStart: ''
+    matchStart: '',
+    penaltiesHome: [],
+    penaltiesAway: []
   };
+  penaltySeq = 0;
   graphicState.activeGraphic = 'none';
   io.emit('stateUpdate', matchState);
   io.emit('switchGraphic', { to: 'none' });
@@ -579,6 +628,17 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Utvisningar ──────────────────────────────────────────────────────────
+  safeOn(socket, 'penaltyAdd', ({ team, minutes, jersey } = {}) => {
+    addPenalty(team, minutes, jersey);
+  });
+  safeOn(socket, 'penaltyRemove', ({ team, id } = {}) => {
+    removePenalty(team, id);
+  });
+  safeOn(socket, 'penaltyClear', ({ team } = {}) => {
+    clearPenalties(team);
+  });
+
   // ── Nollställ match (rensa all matchdata) ─────────────────────────────────
   safeOn(socket, 'resetMatchState', () => {
     resetMatchState();
@@ -611,6 +671,107 @@ app.get('/api/score/home/add', (_req, res) => res.json({ success: true, ...apply
 app.get('/api/score/home/sub', (_req, res) => res.json({ success: true, ...applyScore('A', -1) }));
 app.get('/api/score/away/add', (_req, res) => res.json({ success: true, ...applyScore('B',  1) }));
 app.get('/api/score/away/sub', (_req, res) => res.json({ success: true, ...applyScore('B', -1) }));
+
+// ── Utvisningar (penalties) ──────────────────────────────────────────────────
+// Endast 2 och 5 minuter stöds (standard i innebandy). Andra värden avvisas
+// så att Stream Deck får tydlig feedback istället för konstiga utvisningar.
+const ALLOWED_PENALTY_MINUTES = new Set([2, 5]);
+
+function penaltyArrayFor(team) {
+  if (team === 'home' || team === 'A') return matchState.penaltiesHome;
+  if (team === 'away' || team === 'B') return matchState.penaltiesAway;
+  return null;
+}
+
+function broadcastPenalties() {
+  io.emit('penaltiesUpdate', {
+    penaltiesHome: matchState.penaltiesHome,
+    penaltiesAway: matchState.penaltiesAway
+  });
+}
+
+function addPenalty(team, minutes, jersey) {
+  const arr = penaltyArrayFor(team);
+  if (!arr) return null;
+  const m = parseInt(minutes, 10);
+  if (!ALLOWED_PENALTY_MINUTES.has(m)) return null;
+
+  const duration = m * 60;
+  const entry = {
+    id:        ++penaltySeq,
+    duration,
+    remaining: duration,
+    jersey:    typeof jersey === 'string' ? jersey.trim().slice(0, 3) : ''
+  };
+  arr.push(entry);
+  broadcastPenalties();
+  return entry;
+}
+
+function removePenalty(team, id) {
+  const arr = penaltyArrayFor(team);
+  if (!arr) return false;
+  const numId = parseInt(id, 10);
+  if (!Number.isFinite(numId)) return false;
+  const idx = arr.findIndex(p => p.id === numId);
+  if (idx === -1) return false;
+  arr.splice(idx, 1);
+  broadcastPenalties();
+  return true;
+}
+
+function clearPenalties(team) {
+  // team === 'all' eller saknat = nollställ båda lagen (mål-i-powerplay-fall
+  // hanteras av kontrollpanelen som tar bort äldsta utvisningen per lag).
+  if (!team || team === 'all') {
+    matchState.penaltiesHome.length = 0;
+    matchState.penaltiesAway.length = 0;
+  } else {
+    const arr = penaltyArrayFor(team);
+    if (!arr) return false;
+    arr.length = 0;
+  }
+  broadcastPenalties();
+  return true;
+}
+
+// HTTP-rutter (Stream Deck-vänliga GET)
+//   /api/penalty/home/add?minutes=2&jersey=17
+//   /api/penalty/away/add?minutes=5
+//   /api/penalty/home/remove?id=42
+//   /api/penalty/home/clear
+app.get('/api/penalty/:team/add', (req, res) => {
+  const team = req.params.team;
+  const entry = addPenalty(team, req.query.minutes, req.query.jersey);
+  if (!entry) {
+    return res.status(400).json({
+      success: false,
+      error: 'Ogiltigt lag eller minuter. Använd minutes=2 eller minutes=5 och team=home/away.'
+    });
+  }
+  res.json({ success: true, penalty: entry });
+});
+
+app.get('/api/penalty/:team/remove', (req, res) => {
+  const team = req.params.team;
+  const ok = removePenalty(team, req.query.id);
+  if (!ok) {
+    return res.status(400).json({
+      success: false,
+      error: 'Hittade ingen utvisning med det id:t för det laget.'
+    });
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/penalty/:team/clear', (req, res) => {
+  const team = req.params.team;
+  if (team !== 'home' && team !== 'away' && team !== 'all') {
+    return res.status(400).json({ success: false, error: 'Använd team=home, away eller all.' });
+  }
+  clearPenalties(team);
+  res.json({ success: true });
+});
 
 // ── Klocka ───────────────────────────────────────────────────────────────────
 app.get('/api/clock/start', (_req, res) => {
@@ -752,7 +913,9 @@ app.get('/api/state', (_req, res) => {
     clockRunning: matchState.clockRunning,
     clockVisible: matchState.clockVisible,
     period:       matchState.period,
-    activeGraphic: graphicState.activeGraphic
+    activeGraphic: graphicState.activeGraphic,
+    penaltiesHome: matchState.penaltiesHome,
+    penaltiesAway: matchState.penaltiesAway
   });
 });
 
