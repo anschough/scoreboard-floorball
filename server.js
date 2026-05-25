@@ -3,7 +3,6 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
 const axios   = require('axios');
-const cheerio = require('cheerio');
 
 const app    = express();
 const server = http.createServer(app);
@@ -151,6 +150,8 @@ async function fetchHtml(url) {
 // Steg 2: Anropa relevant endpoint (standings/lineups) med Bearer-token.
 
 // Gemensam token-helper – returnerar { accessToken, apiRoot, headers }.
+// Validerar att svaret innehåller apiRoot + accessToken så att en HTML-felsida
+// från IBIS eller en tom respons inte orsakar obegripliga krascher längre ner.
 async function getInnebandyAuth() {
   const { data: kit } = await axios.get(
     'https://api.innebandy.se/StatsAppApi/api/startkit',
@@ -164,6 +165,12 @@ async function getInnebandyAuth() {
       }
     }
   );
+  if (!kit || typeof kit !== 'object') {
+    throw new Error('IBIS startkit svarade med oväntat format');
+  }
+  if (!kit.apiRoot || !kit.accessToken) {
+    throw new Error('IBIS startkit saknar apiRoot eller accessToken – API:et kan ha ändrats');
+  }
   return {
     apiRoot: kit.apiRoot,
     headers: {
@@ -354,21 +361,29 @@ async function fetchInnebandyStandings(url) {
 
   const { apiRoot, headers } = await getInnebandyAuth();
 
-  // Hämta seriens metadata + tabell parallellt
-  const [metaResp, standingsResp] = await Promise.all([
+  // Hämta seriens metadata + tabell parallellt. allSettled så att en saknad
+  // metadata-endpoint inte gör att hela tabellen misslyckas.
+  const [metaRes, standingsRes] = await Promise.allSettled([
     axios.get(`${apiRoot}competitions/${competitionId}`,
       { timeout: 10000, headers }),
     axios.get(`${apiRoot}competitions/${competitionId}/standings`,
       { timeout: 10000, headers })
   ]);
 
-  const name = metaResp.data?.Name || '';
+  // Tabellen är obligatorisk; metadata (namn) är "nice to have"
+  if (standingsRes.status === 'rejected') {
+    throw new Error(`Tabell-API:et svarade inte: ${standingsRes.reason.message}`);
+  }
+  const name = metaRes.status === 'fulfilled'
+    ? (metaRes.value.data?.Name || '')
+    : '';
 
-  const standingsRows = standingsResp.data.StandingsRows
-    || standingsResp.data.standingsRows
-    || standingsResp.data
+  const standingsData = standingsRes.value.data;
+  const standingsRows = standingsData?.StandingsRows
+    || standingsData?.standingsRows
+    || standingsData
     || [];
-  if (!Array.isArray(standingsRows)) throw new Error('Oväntat API-svar');
+  if (!Array.isArray(standingsRows)) throw new Error('Oväntat API-svar för serietabell');
 
   const rows = standingsRows.map(r => {
     const played       = (r.PlayedMatchesHome || 0) + (r.PlayedMatchesAway || 0);
@@ -400,15 +415,34 @@ async function fetchInnebandyStandings(url) {
 }
 
 // ── Socket-hantering ─────────────────────────────────────────────────────────
+// safeOn() wrappar varje handler i try/catch så att en korrupt payload eller
+// en oväntad runtime-bugg loggas i stället för att krascha hela processen.
+// Async handlers stöds också – då fångas både synkrona kast och promise-rejects.
+function safeOn(socket, event, handler) {
+  socket.on(event, (...args) => {
+    try {
+      const ret = handler(...args);
+      if (ret && typeof ret.catch === 'function') {
+        ret.catch(err => console.error(`[socket:${event}]`, err && err.message || err));
+      }
+    } catch (err) {
+      console.error(`[socket:${event}]`, err && err.message || err);
+    }
+  });
+}
+
 io.on('connection', (socket) => {
   console.log(`Klient ansluten: ${socket.id}`);
 
-  // Ny klient får aktuellt state + vilken grafik som är aktiv
+  // Ny klient får aktuellt state + vilken grafik som är aktiv + klock-status
+  // så att en OBS Browser Source som laddas om mitt i matchen omedelbart får
+  // rätt poäng, klocka, period, aktiv vy och clock-running-indikator.
   socket.emit('stateUpdate', matchState);
   socket.emit('graphicState', graphicState);
+  socket.emit('clockStatus', { running: matchState.clockRunning });
 
   // ── Poängtavla ───────────────────────────────────────────────────────────
-  socket.on('updateNames', ({ teamA, teamB, teamAShort, teamBShort }) => {
+  safeOn(socket, 'updateNames', ({ teamA, teamB, teamAShort, teamBShort } = {}) => {
     if (teamA != null) matchState.teamA = teamA || matchState.teamA;
     if (teamB != null) matchState.teamB = teamB || matchState.teamB;
     // Förkortning: använd inskickad short, annars första 6 tecken av fullnamn
@@ -425,38 +459,40 @@ io.on('connection', (socket) => {
     io.emit('stateUpdate', matchState);
   });
 
-  socket.on('updateScore', ({ team, delta }) => {
-    if (team === 'A') matchState.scoreA = Math.max(0, matchState.scoreA + delta);
-    if (team === 'B') matchState.scoreB = Math.max(0, matchState.scoreB + delta);
+  safeOn(socket, 'updateScore', ({ team, delta } = {}) => {
+    const d = parseInt(delta, 10);
+    if (!Number.isFinite(d)) return;
+    if (team === 'A') matchState.scoreA = Math.max(0, matchState.scoreA + d);
+    if (team === 'B') matchState.scoreB = Math.max(0, matchState.scoreB + d);
     io.emit('stateUpdate', matchState);
   });
 
-  socket.on('clockStart', () => { startClock(); io.emit('clockStatus', { running: true }); });
-  socket.on('clockPause', () => { pauseClock(); io.emit('clockStatus', { running: false }); });
-  socket.on('clockReset', () => { resetClock(); io.emit('clockStatus', { running: false }); });
+  safeOn(socket, 'clockStart', () => { startClock(); io.emit('clockStatus', { running: true }); });
+  safeOn(socket, 'clockPause', () => { pauseClock(); io.emit('clockStatus', { running: false }); });
+  safeOn(socket, 'clockReset', () => { resetClock(); io.emit('clockStatus', { running: false }); });
 
   // Period via socket (HTTP-rutter finns också för Stream Deck)
-  socket.on('periodNext', () => {
+  safeOn(socket, 'periodNext', () => {
     matchState.period = Math.min(5, (matchState.period || 1) + 1);
     io.emit('stateUpdate', matchState);
   });
-  socket.on('periodReset', () => {
+  safeOn(socket, 'periodReset', () => {
     matchState.period = 1;
     io.emit('stateUpdate', matchState);
   });
 
   // Dölj/visa klockan (period förblir alltid synlig)
-  socket.on('setClockVisibility', ({ visible }) => {
+  safeOn(socket, 'setClockVisibility', ({ visible } = {}) => {
     matchState.clockVisible = !!visible;
     io.emit('stateUpdate', matchState);
   });
-  socket.on('toggleClockVisibility', () => {
+  safeOn(socket, 'toggleClockVisibility', () => {
     matchState.clockVisible = !matchState.clockVisible;
     io.emit('stateUpdate', matchState);
   });
 
   // ── Laguppställningar & Tabell (data-uppdateringar) ──────────────────────
-  socket.on('updateLineups', ({ home, away, homeLeaders, awayLeaders }) => {
+  safeOn(socket, 'updateLineups', ({ home, away, homeLeaders, awayLeaders } = {}) => {
     if (Array.isArray(home))         matchState.lineupHome        = home;
     if (Array.isArray(away))         matchState.lineupAway        = away;
     if (Array.isArray(homeLeaders))  matchState.lineupHomeLeaders = homeLeaders;
@@ -464,7 +500,7 @@ io.on('connection', (socket) => {
     io.emit('stateUpdate', matchState);
   });
 
-  socket.on('updateTable', (payload) => {
+  safeOn(socket, 'updateTable', (payload) => {
     // Accepterar antingen en array (rader) eller { rows, name }.
     if (Array.isArray(payload)) {
       matchState.table     = payload;
@@ -477,7 +513,7 @@ io.on('connection', (socket) => {
   });
 
   // Kommentatorer (lower-third)
-  socket.on('updateCommentators', ({ name1, name2 }) => {
+  safeOn(socket, 'updateCommentators', ({ name1, name2 } = {}) => {
     matchState.commentators = {
       name1: typeof name1 === 'string' ? name1.trim() : matchState.commentators.name1,
       name2: typeof name2 === 'string' ? name2.trim() : matchState.commentators.name2
@@ -487,7 +523,7 @@ io.on('connection', (socket) => {
 
   // Match-meta (venue + logos + matchstart) – kontrollpanelen pushar dessa
   // efter fetch så att användaren även kan redigera Venue innan visning.
-  socket.on('updateMatchMeta', ({ venue, homeLogo, awayLogo, matchStart }) => {
+  safeOn(socket, 'updateMatchMeta', ({ venue, homeLogo, awayLogo, matchStart } = {}) => {
     if (typeof venue      === 'string') matchState.venue      = venue.trim();
     if (typeof homeLogo   === 'string') matchState.homeLogo   = homeLogo;
     if (typeof awayLogo   === 'string') matchState.awayLogo   = awayLogo;
@@ -495,7 +531,7 @@ io.on('connection', (socket) => {
     io.emit('stateUpdate', matchState);
   });
 
-  socket.on('updateFixtures', (payload) => {
+  safeOn(socket, 'updateFixtures', (payload) => {
     if (Array.isArray(payload)) {
       matchState.fixtures      = payload;
       matchState.fixturesTitle = '';
@@ -509,17 +545,21 @@ io.on('connection', (socket) => {
   // ── Exklusiv grafik-växling ──────────────────────────────────────────────
   // Kontrollpanelen skickar vilket element som ska vara aktivt.
   // Servern sparar state så att nya klienter (OBS-reload) återfår rätt bild.
-  socket.on('switchGraphic', ({ to }) => {
+  safeOn(socket, 'switchGraphic', ({ to } = {}) => {
+    // Acceptera även 'clear' som synonym för 'none' så att kontrollpanelens
+    // "Dölj all grafik"-knapp (data-graphic="clear") fungerar – samma
+    // beteende som HTTP-rutten /api/graphic/clear.
+    const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
                      'commentators', 'matchup', 'intermission', 'none'];
-    if (!allowed.includes(to)) return;
-    graphicState.activeGraphic = to;
-    io.emit('switchGraphic', { to });
-    console.log(`Grafik-byte → ${to}`);
+    if (!allowed.includes(target)) return;
+    graphicState.activeGraphic = target;
+    io.emit('switchGraphic', { to: target });
+    console.log(`Grafik-byte → ${target}`);
   });
 
   // ── API: stats.innebandy.se – Allt på en gång (match + serietabell) ─────
-  socket.on('fetch_innebandy_all_data', async ({ url }) => {
+  safeOn(socket, 'fetch_innebandy_all_data', async ({ url } = {}) => {
     if (!url) return;
     console.log(`Hämtar all data: ${url}`);
     try {
@@ -534,13 +574,13 @@ io.on('connection', (socket) => {
       console.error(`  → Fel: ${err.message}`);
       socket.emit('fetch_error', {
         context: 'innebandy_all',
-        message: err.message
+        message: err.message || 'Okänt fel vid hämtning'
       });
     }
   });
 
   // ── Nollställ match (rensa all matchdata) ─────────────────────────────────
-  socket.on('resetMatchState', () => {
+  safeOn(socket, 'resetMatchState', () => {
     resetMatchState();
   });
 
@@ -716,10 +756,32 @@ app.get('/api/state', (_req, res) => {
   });
 });
 
+// ── Process-skydd: håll igång under sändning även vid oväntat fel ───────────
+// Linux + Node 15+ kraschar default vid unhandledRejection. Under en live-
+// sändning vill vi logga och fortsätta i stället för att tappa grafiken.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason && reason.stack || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack || err);
+});
+
 // ── Starta server ────────────────────────────────────────────────────────────
-const PORT = 3000;
-server.listen(PORT, () => {
-  console.log(`\n✅ Scoreboard-server igång på http://localhost:${PORT}`);
+// Honorera $PORT (Linux/CI/systemd) men fall tillbaka på 3000.
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} används redan. Stäng processen som lyssnar där eller starta med PORT=<annan port> npm start\n`);
+  } else {
+    console.error('[server.error]', err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`\n✅ Scoreboard-server igång (lyssnar på ${HOST}:${PORT})`);
   console.log(`   Grafik (OBS Browser Source): http://localhost:${PORT}/graphics.html`);
   console.log(`   Kontrollpanel:               http://localhost:${PORT}/control.html\n`);
 });

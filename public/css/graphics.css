@@ -69,11 +69,22 @@ html, body {
 /* ══════════════════════════════════════════════════════════════════════════
    SCOREBOARD – glasmorf med neon-accent i botten
 ═══ */
+/* ── Z-index-hierarki ────────────────────────────────────────────────────────
+   Sätter en deterministisk staplingsordning för alla grafik-paneler så att de
+   aldrig kan hamna i fel inbördes ordning under en transition (där både den
+   utgående och inkommande panelen renderas samtidigt under exit-animationen).
+   Högre nummer = ovanpå.
+     20  – scoreboard (alltid överst när den syns)
+     15  – commentators (lower-third, lägger sig över fullskärms-grafik)
+     10  – matchup + intermission (fullskärms paus-/inför-skylt)
+      5  – lineup, table, fixtures (centrerade fullskärms-grafiker)
+═══ */
 #scoreboard {
   position: fixed;
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 20;
 
   display: flex;
   align-items: stretch;
@@ -256,6 +267,7 @@ html, body {
   position: fixed;
   top: 50%;
   left: 50%;
+  z-index: 5;
 
   /* Standardläge (dolt): något under center + nedskalad */
   transform: translate(-50%, calc(-50% + 24px)) scale(0.95);
@@ -890,6 +902,7 @@ html, body {
   left: 48px;
   bottom: 48px;
   width: 480px;
+  z-index: 15;
   display: flex;
   flex-direction: column;
   background: var(--glass-bg);
@@ -1051,6 +1064,7 @@ html, body {
   width: min(1500px, 94vw);
   padding: 38px 80px 28px;
   border-radius: 18px;
+  z-index: 10;
 
   /* Mörk frosted-glass-remsa för läsbarhet mot rörligt spel */
   background: linear-gradient(180deg,
@@ -1309,6 +1323,7 @@ html, body {
   width: min(1500px, 94vw);
   padding: 38px 80px 28px;
   border-radius: 18px;
+  z-index: 10;
 
   /* Identisk frosted-glass-platta som matchup-skylten */
   background: linear-gradient(180deg,
