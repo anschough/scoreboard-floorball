@@ -629,22 +629,40 @@ input[type="url"]:focus {
 .btn-clock-xl:active { transform: scale(0.97); }
 .btn-clock-xl:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.btn-start {
-  background: rgba(var(--lb-900-rgb), 0.2);
-  color: var(--accent-hi);
-  border: 1px solid rgba(var(--lb-900-rgb), 0.4);
+/* Start = fylld grön i klickbart läge. När :disabled gäller dämpas knappen
+   via .btn-clock-xl:disabled { opacity: 0.35 } ovan. */
+.btn-start:not(:disabled) {
+  background: #22c55e;
+  color: #062012;
+  border: 1px solid #16a34a;
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.35);
+}
+.btn-start:disabled {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.35);
 }
 .btn-start:hover:not(:disabled) {
-  background: var(--accent-hi);
-  color: var(--sollentuna-dark-blue);
+  background: #16a34a;
+  color: #ffffff;
 }
 
-.btn-pause {
-  background: rgba(245, 166, 35, 0.18);
-  color: #f5a623;
-  border: 1px solid rgba(245, 166, 35, 0.3);
+/* Stop = fylld röd i klickbart läge. Samma disabled-dämpning som ovan. */
+.btn-pause:not(:disabled) {
+  background: #ef4444;
+  color: #ffffff;
+  border: 1px solid #dc2626;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.35);
 }
-.btn-pause:hover:not(:disabled) { background: rgba(245, 166, 35, 0.3); color: #ffc14a; }
+.btn-pause:disabled {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.btn-pause:hover:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+}
 
 .btn-reset {
   background: rgba(0, 0, 0, 0.35);
@@ -652,6 +670,58 @@ input[type="url"]:focus {
   border: 1px solid var(--border);
 }
 .btn-reset:hover { background: rgba(0, 0, 0, 0.55); color: var(--text); }
+
+/* Manuell tidsjustering – kompakt rad med +1 s / -1 s, MM:SS-fält och "Justera tid".
+   Fyra kolumner med lika delning så knapparnas bredd är jämn; gap matchar
+   .clock-controls-xl ovan (8px). margin-bottom skiljer raden från
+   "Dölj klockan" som är en separat funktion. */
+.clock-adjust-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.6fr 1.6fr;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 18px;
+}
+.btn-clock-adjust,
+.btn-clock-set {
+  padding: 14px 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: rgba(var(--lb-900-rgb), 0.14);
+  color: var(--accent-hi);
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  transition: all 0.12s var(--ease-out);
+}
+.btn-clock-adjust:hover,
+.btn-clock-set:hover {
+  background: rgba(var(--lb-900-rgb), 0.28);
+  color: #ffffff;
+}
+.btn-clock-adjust:active,
+.btn-clock-set:active { transform: scale(0.97); }
+
+/* Behåller den ljusa stilen från det generiska input[type="text"]-blocket
+   ovan; lägger bara till centrering, tabular-nums och fel-animation. */
+input[type="text"].input-clock-set {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+input[type="text"].input-clock-set.input-error {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  animation: clockInputShake 0.4s var(--ease-out);
+}
+@keyframes clockInputShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
 
 /* Period */
 .period-row {
@@ -1082,26 +1152,16 @@ input[type="url"]:focus {
   font-size: 0.92rem; color: var(--accent-hi); font-weight: 600;
 }
 
-.api-copy-toast {
-  font-size: 0.78rem; font-weight: 700; color: var(--accent-hi);
-  background: rgba(var(--lb-900-rgb), 0.18);
-  border: 1px solid rgba(var(--lb-900-rgb), 0.4);
-  border-radius: 6px; padding: 3px 10px;
-  animation: apiToast 1.4s ease forwards;
-}
-@keyframes apiToast {
-  0%   { opacity: 0; transform: translateY(-4px); }
-  15%  { opacity: 1; transform: translateY(0); }
-  80%  { opacity: 1; }
-  100% { opacity: 0; }
-}
-
 .api-group h3 {
   font-size: 0.76rem; font-weight: 700; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
 }
 
-.api-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+/* table-layout: fixed + explicita kolumnbredder gör att SHORTCUT URL- och
+   EFFEKT-kolumnerna ligger i exakt samma x-position i alla tabeller, oavsett
+   responsiv bredd. 20rem rymmer den längsta URL:en (/api/graphic/commentators/toggle)
+   plus copy-ikonen utan att wrappa. */
+.api-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; table-layout: fixed; }
 .api-table thead tr { background: rgba(var(--lb-500-rgb), 0.06); }
 .api-table th {
   text-align: left; font-size: 0.68rem; font-weight: 700;
@@ -1109,6 +1169,8 @@ input[type="url"]:focus {
   color: var(--text-muted); padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
+.api-table th:first-child,
+.api-table td:first-child { width: 20rem; }
 .api-table td {
   padding: 7px 10px; color: var(--text);
   border-bottom: 1px solid var(--border); vertical-align: top;
@@ -1123,13 +1185,55 @@ input[type="url"]:focus {
 }
 .api-table code.api-route {
   color: var(--accent); cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.15s;
+  border: 1px solid var(--border);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.api-table code.api-route:hover {
+/* Synlig kopieringsikon (unicode U+29C9 "two joined squares") signalerar
+   att cellen är klickbar. Blir mer framträdande vid hover/focus. */
+.api-table code.api-route::after {
+  content: '\29C9';
+  margin-left: 8px;
+  font-size: 0.95em;
+  color: var(--text-muted);
+  transition: color 0.15s, transform 0.15s;
+  display: inline-block;
+  vertical-align: baseline;
+}
+.api-table code.api-route:hover,
+.api-table code.api-route:focus-visible {
   color: var(--accent-hi);
   background: rgba(var(--lb-500-rgb), 0.14);
   border-color: var(--border-strong);
+  outline: none;
+}
+.api-table code.api-route:hover::after,
+.api-table code.api-route:focus-visible::after {
+  color: var(--accent-hi);
+  transform: translateY(-1px);
+}
+
+/* Feedback-tillstånd direkt på cellen */
+.api-table code.api-route.copied {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+.api-table code.api-route.copied::after {
+  content: '\2713 Kopierat';
+  color: #22c55e;
+  font-family: inherit;
+  font-weight: 700;
+}
+.api-table code.api-route.copy-failed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.api-table code.api-route.copy-failed::after {
+  content: '\2715 Misslyckades';
+  color: #ef4444;
+  font-family: inherit;
+  font-weight: 700;
 }
 
 
@@ -1151,7 +1255,6 @@ input[type="url"]:focus {
   .form-grid-2 { grid-template-columns: 1fr; }
   .ib-lineup-grid { grid-template-columns: 1fr; }
   .header-top { flex-wrap: wrap; }
-  .mixer-bar { justify-content: center; }
   .score-board-xl { grid-template-columns: 1fr; }
   .score-vs { display: none; }
   .header-brand h1 { font-size: 1rem; }

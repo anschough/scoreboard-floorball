@@ -130,6 +130,17 @@ function resetClock() {
   io.emit('stateUpdate', matchState);
 }
 
+// Manuell justering – används när vi missat att starta/stoppa i exakt rätt
+// ögonblick. Klocka kan justeras både medan den tickar och när den är pausad.
+// Penalty-timrar är frikopplade från elapsedSeconds och påverkas inte.
+const MAX_CLOCK_SECONDS = 99 * 60 + 59;
+function setClockSeconds(seconds) {
+  const s = Math.max(0, Math.min(MAX_CLOCK_SECONDS, Math.floor(seconds)));
+  elapsedSeconds = s;
+  matchState.clock = formatTime(elapsedSeconds);
+  io.emit('clockTick', { clock: matchState.clock });
+}
+
 // Nollställer all matchdata till defaultvärden – används för "Rensa cache" /
 // "Nollställ match" mellan sändningar så nästa match börjar från tomt blad.
 // Stannar klockan, nollar period, tömmer lineups/tabell/omgång/kommentatorer
@@ -519,6 +530,18 @@ io.on('connection', (socket) => {
   safeOn(socket, 'clockStart', () => { startClock(); io.emit('clockStatus', { running: true }); });
   safeOn(socket, 'clockPause', () => { pauseClock(); io.emit('clockStatus', { running: false }); });
   safeOn(socket, 'clockReset', () => { resetClock(); io.emit('clockStatus', { running: false }); });
+
+  // Manuell tidsjustering (±N sekunder eller sätt absolut MM:SS via sekunder)
+  safeOn(socket, 'clockAdjust', ({ delta } = {}) => {
+    const d = parseInt(delta, 10);
+    if (!Number.isFinite(d)) return;
+    setClockSeconds(elapsedSeconds + d);
+  });
+  safeOn(socket, 'clockSet', ({ seconds } = {}) => {
+    const s = parseInt(seconds, 10);
+    if (!Number.isFinite(s)) return;
+    setClockSeconds(s);
+  });
 
   // Period via socket (HTTP-rutter finns också för Stream Deck)
   safeOn(socket, 'periodNext', () => {
