@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoreboard Kontroll</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/control.css">
+</head>
+<body>
+
+  <div class="dashboard">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         STICKY HEADER – brand + status + bildmixer (alltid synlig)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <header class="dashboard-header">
+      <div class="header-top">
+        <div class="header-brand">
+          <h1>FBC Sollentuna Graphic Broadcast</h1>
+        </div>
+        <div class="header-meta">
+          <span class="on-air-pill">
+            <span class="on-air-dot"></span>
+            <span class="on-air-label">ON AIR</span>
+            <span id="activeGraphicIndicator" class="on-air-value">Scoreboard</span>
+          </span>
+          <span id="connection-status" class="status disconnected">Ansluter…</span>
+          <a href="api-docs.html" target="_blank" rel="noopener" class="header-btn">
+            Stream Deck shortcuts
+          </a>
+        </div>
+      </div>
+
+      <!-- Bildmixer – direktväxling mellan grafiker -->
+      <div class="mixer-wrap">
+        <span class="mixer-label">Välj vad som ska visas på skärmen</span>
+        <nav class="mixer-bar" aria-label="Grafik-mixer">
+          <button class="mixer-btn mixer-btn-clear" data-graphic="clear" title="Göm alla grafiker">Dölj all grafik</button>
+          <button class="mixer-btn" data-graphic="matchup"      title="Visa inför/paus-skylten live">Inför match</button>
+          <button class="mixer-btn" data-graphic="commentators" title="Visa kommentator-skylten live">Kommentatorer</button>
+          <button class="mixer-btn" data-graphic="scoreboard"   title="Visa scoreboard live">Scoreboard</button>
+          <button class="mixer-btn" data-graphic="lineupHome"   title="Visa hemmalagets uppställning live">Hemma Lineup</button>
+          <button class="mixer-btn" data-graphic="lineupAway"   title="Visa bortalagets uppställning live">Borta Lineup</button>
+          <button class="mixer-btn" data-graphic="table"        title="Visa serietabellen live">Tabell</button>
+          <button class="mixer-btn" data-graphic="fixtures"     title="Visa omgångens matcher live">Omgång</button>
+          <button class="mixer-btn" data-graphic="intermission" title="Visa pausvila-skylten live (räknar ut nästa period)">Pausvila</button>
+        </nav>
+      </div>
+    </header>
+
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         MIXER-VY – 3-kolumners dashboard
+    ══════════════════════════════════════════════════════════════════════ -->
+    <main id="view-mixer" class="dashboard-grid">
+
+      <!-- ────────────────────────────────────────────────────────────
+           KOLUMN 1 – Pre-game & Setup
+      ──────────────────────────────────────────────────────────── -->
+      <section class="dash-col">
+
+        <article class="dash-card">
+          <h2>Hämta data från IBIS</h2>
+          <p class="card-hint">
+            En länk räcker — lagnamn, uppställningar, tabell och omgång fylls i.
+          </p>
+          <div class="url-row">
+            <input type="url" id="urlMatchAll" class="input-url input-url-big"
+                   placeholder="Klistra in länk till matchen…">
+            <button id="btnFetchAll" class="btn btn-primary btn-fetch-big">Hämta</button>
+          </div>
+          <div id="fetchStatusAll" class="fetch-status"></div>
+        </article>
+
+        <article class="dash-card">
+          <h2>Lagnamn</h2>
+          <p class="card-hint">
+            <strong>Fullständigt namn</strong> visas i tabell/uppställningar/matchup. <strong>Kort namn</strong> i scoreboarden.
+          </p>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label for="inputTeamA">Hemma – fullständigt namn</label>
+              <input type="text" id="inputTeamA" placeholder="t.ex. FBC Sollentuna" maxlength="40">
+            </div>
+            <div class="input-group">
+              <label for="inputTeamB">Borta – fullständigt namn</label>
+              <input type="text" id="inputTeamB" placeholder="t.ex. Hagunda IF" maxlength="40">
+            </div>
+            <div class="input-group">
+              <label for="inputTeamAShort">Hemma – kort namn</label>
+              <input type="text" id="inputTeamAShort" placeholder="SOL" maxlength="8">
+            </div>
+            <div class="input-group">
+              <label for="inputTeamBShort">Borta – kort namn</label>
+              <input type="text" id="inputTeamBShort" placeholder="HAG" maxlength="8">
+            </div>
+          </div>
+          <button id="btnUpdateNames" class="btn btn-primary full-width">Uppdatera namn</button>
+        </article>
+
+        <article class="dash-card">
+          <h2>Kommentatorer</h2>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label for="inputCommentator1">Kommentator 1</label>
+              <input type="text" id="inputCommentator1" placeholder="Ange namn här..." maxlength="40">
+            </div>
+            <div class="input-group">
+              <label for="inputCommentator2">Kommentator 2</label>
+              <input type="text" id="inputCommentator2" placeholder="Ange namn här..." maxlength="40">
+            </div>
+          </div>
+          <button id="btnSaveCommentators" class="btn btn-primary full-width">Spara kommentatorer</button>
+        </article>
+
+        <article class="dash-card">
+          <h2>Spelplats</h2>
+          <div class="url-row">
+            <input type="text" id="inputVenue" class="input-url"
+                   placeholder="Ange spelplats här..." maxlength="60">
+            <button id="btnSaveVenue" class="btn btn-primary">Spara</button>
+          </div>
+        </article>
+
+        <article class="dash-card">
+          <h2>Nollställ match</h2>
+          <p class="card-hint">
+            Tömmer lagnamn, poäng, klocka, period, uppställningar, tabell, omgång,
+            kommentatorer och spelplats. Använd mellan matcher.
+          </p>
+          <button id="btnResetMatch" class="btn btn-danger full-width">
+            Rensa all matchdata
+          </button>
+        </article>
+
+      </section>
+
+
+      <!-- ────────────────────────────────────────────────────────────
+           KOLUMN 2 – Live Action (centralt, störst)
+      ──────────────────────────────────────────────────────────── -->
+      <section class="dash-col dash-col-live">
+
+        <article class="dash-card live-card">
+          <h2>Resultat just nu</h2>
+          <div class="score-board-xl">
+            <div class="score-side">
+              <div class="score-team" id="labelA">Hemma</div>
+              <div class="score-display-xl" id="displayScoreA">0</div>
+              <div class="score-buttons">
+                <button class="btn-score-xl btn-minus" data-team="A" data-delta="-1" aria-label="Hemma -1">−1</button>
+                <button class="btn-score-xl btn-plus"  data-team="A" data-delta="1"  aria-label="Hemma +1">+1</button>
+              </div>
+            </div>
+            <div class="score-vs">VS</div>
+            <div class="score-side">
+              <div class="score-team" id="labelB">Borta</div>
+              <div class="score-display-xl" id="displayScoreB">0</div>
+              <div class="score-buttons">
+                <button class="btn-score-xl btn-minus" data-team="B" data-delta="-1" aria-label="Borta -1">−1</button>
+                <button class="btn-score-xl btn-plus"  data-team="B" data-delta="1"  aria-label="Borta +1">+1</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="dash-card live-card">
+          <h2>Matchklocka</h2>
+          <div class="clock-display-xl" id="displayClock">00:00</div>
+          <div class="clock-controls-xl">
+            <button id="btnStart" class="btn-clock-xl btn-start">Start</button>
+            <button id="btnPause" class="btn-clock-xl btn-pause" disabled>Paus</button>
+            <button id="btnReset" class="btn-clock-xl btn-reset">Återställ</button>
+          </div>
+          <button id="btnToggleClock" class="btn btn-secondary full-width">Dölj klockan</button>
+        </article>
+
+        <article class="dash-card live-card">
+          <h2>Period</h2>
+          <div class="period-row">
+            <div class="period-display" id="periodDisplay">Period 1</div>
+            <div class="period-buttons">
+              <button id="btnPeriodNext"  class="btn btn-primary">Nästa period</button>
+              <button id="btnPeriodReset" class="btn btn-secondary">Återställ</button>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+
+      <!-- ────────────────────────────────────────────────────────────
+           KOLUMN 3 – Data Preview (inre scroll)
+      ──────────────────────────────────────────────────────────── -->
+      <section class="dash-col dash-col-preview">
+
+        <article class="dash-card scroll-card">
+          <h2>Laguppställningar</h2>
+          <div class="scroll-body">
+            <div id="previewInnebandyLineup" class="ib-lineup-grid" hidden>
+              <div class="preview-box">
+                <div class="preview-header">
+                  <span class="ib-lineup-side">Hemma</span>
+                  <span id="previewIbHomeCount" class="preview-count"></span>
+                </div>
+                <div id="previewIbHomeName" class="ib-team-name"></div>
+                <div id="previewIbHomeList" class="preview-list ib-single-col"></div>
+                <button id="btnSendIbHome" class="btn btn-send full-width">
+                  Visa Hemma live
+                </button>
+              </div>
+              <div class="preview-box">
+                <div class="preview-header">
+                  <span class="ib-lineup-side">Borta</span>
+                  <span id="previewIbAwayCount" class="preview-count"></span>
+                </div>
+                <div id="previewIbAwayName" class="ib-team-name"></div>
+                <div id="previewIbAwayList" class="preview-list ib-single-col"></div>
+                <button id="btnSendIbAway" class="btn btn-send full-width">
+                  Visa Borta live
+                </button>
+              </div>
+            </div>
+            <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
+          </div>
+        </article>
+
+        <article class="dash-card scroll-card">
+          <h2>Serietabell</h2>
+          <div class="scroll-body">
+            <div id="previewInnebandyTable" class="preview-box" hidden>
+              <div class="preview-header">
+                <span id="previewInnebandyTableCount" class="preview-count"></span>
+                <button id="btnClearInnebandyTable" class="btn-clear" title="Rensa">✕</button>
+              </div>
+              <div class="preview-table-wrap">
+                <table class="preview-standings">
+                  <thead>
+                    <tr><th></th><th>#</th><th>Lag</th><th>S</th><th>V</th><th>O</th><th>F</th><th title="Gjorda-insläppta">GM-IM</th><th title="Målskillnad">MD</th><th>P</th></tr>
+                  </thead>
+                  <tbody id="previewInnebandyTableBody"></tbody>
+                </table>
+              </div>
+              <button id="btnSendInnebandyTable" class="btn btn-send full-width">
+                Visa Tabell live
+              </button>
+            </div>
+            <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
+          </div>
+        </article>
+
+        <article class="dash-card scroll-card">
+          <h2>Omgångens matcher</h2>
+          <div class="scroll-body">
+            <div id="previewFixtures" class="preview-box" hidden>
+              <div class="preview-header">
+                <span id="previewFixturesCount" class="preview-count"></span>
+                <button id="btnClearFixtures" class="btn-clear" title="Rensa">✕</button>
+              </div>
+              <div id="previewFixturesList" class="preview-fixtures-list"></div>
+              <button id="btnSendFixtures" class="btn btn-send full-width">
+                Visa Omgångens Matcher live
+              </button>
+            </div>
+            <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
+          </div>
+        </article>
+
+      </section>
+
+    </main>
+
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/control.js"></script>
+</body>
+</html>

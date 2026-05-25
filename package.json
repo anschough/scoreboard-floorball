@@ -1,0 +1,15 @@
+{
+  "name": "scoreboard-floorball",
+  "version": "1.0.0",
+  "description": "Webbaserat live-grafik system för floorball-sändningar",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.16.1",
+    "cheerio": "^1.2.0",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

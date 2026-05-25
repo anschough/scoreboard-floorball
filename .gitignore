@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# macOS
+.DS_Store
+
+# Miljövariabler (lösenord, API-nycklar)
+.env
+.env.local
+
+# Loggar
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code (personliga lokala inställningar)
+.claude/settings.local.json

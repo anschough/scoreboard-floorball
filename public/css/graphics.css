@@ -1,0 +1,1512 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   PALETT + DESIGN TOKENS – Sollentuna + premium broadcast-glas
+═══ */
+:root {
+  /* ── Sollentuna-palett (oförändrad) ── */
+  --sollentuna-lb-900:    #5BB4FF;
+  --sollentuna-lb-700:    #8ECBFF;
+  --sollentuna-lb-500:    #A7D7FF;
+  --sollentuna-lb-300:    #C1E3FF;
+  --sollentuna-lb-200:    #DAEEFF;
+  --sollentuna-dark-blue: #00263E;
+  --sollentuna-black:     #252525;
+  --sollentuna-white:     #FFFFFF;
+
+  /* RGB-kanaler för rgba() */
+  --lb-500-rgb:    167, 215, 255;
+  --lb-900-rgb:    91, 180, 255;
+  --dark-blue-rgb: 0, 38, 62;
+  --white-rgb:     255, 255, 255;
+
+  /* ── Glasmorf-material ── */
+  --glass-bg:      rgba(10, 16, 26, 0.78);
+  --glass-bg-deep: rgba(6, 12, 20, 0.86);
+  --glass-blur:    blur(14px) saturate(140%);
+  --glass-border:  1px solid rgba(255, 255, 255, 0.08);
+  --glass-shadow:  0 24px 60px rgba(0, 0, 0, 0.55),
+                   0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+                   0 1px 0 rgba(255, 255, 255, 0.08) inset;
+
+  /* ── Accent (neon-glöd) ── */
+  --accent:        var(--sollentuna-lb-500);
+  --accent-hi:     var(--sollentuna-lb-900);
+  --accent-glow:   0 0 18px rgba(var(--lb-900-rgb), 0.55),
+                   0 0 36px rgba(var(--lb-900-rgb), 0.22);
+
+  /* ── Text-hierarki ── */
+  --text-strong:   var(--sollentuna-white);
+  --text-soft:     var(--sollentuna-lb-200);
+  --text-faint:    rgba(193, 227, 255, 0.45);
+
+  /* ── Borders ── */
+  --border-soft:   rgba(var(--lb-500-rgb), 0.10);
+  --border-accent: rgba(var(--lb-500-rgb), 0.28);
+
+  /* ── Easings (sportig snap + mjuka exits) ── */
+  --ease-snap:     cubic-bezier(0.175, 0.885, 0.32, 1.275);  /* overshoot */
+  --ease-out:      cubic-bezier(0.22, 1, 0.36, 1);            /* deceleration */
+  --ease-in:       cubic-bezier(0.55, 0, 0.55, 0.2);          /* exit */
+
+  /* ── Typografi – Readex Pro (föreningens typsnitt, självhostat) ── */
+  --font-display:  'Readex Pro', 'Segoe UI', sans-serif;  /* siffror, klocka, eyebrows */
+  --font-name:     'Readex Pro', 'Segoe UI', sans-serif;  /* lagnamn, titlar */
+}
+
+/* ── Reset & bas ─────────────────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: transparent;          /* OBS Browser Source kräver detta */
+  overflow: hidden;
+  font-family: var(--font-name);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SCOREBOARD – glasmorf med neon-accent i botten
+═══ */
+#scoreboard {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: stretch;
+
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+
+  /* Entry-animation: snärt in från ovan */
+  opacity: 1;
+  transition: opacity 0.55s var(--ease-out),
+              transform 0.6s var(--ease-snap);
+  will-change: opacity, transform;
+}
+
+/* Glödande neon-linje längst ner – signaturen */
+#scoreboard::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              var(--accent-hi) 50%,
+              transparent 100%);
+  box-shadow: var(--accent-glow);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Dolt läge – glider upp och tonas */
+#scoreboard.scoreboard-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-44px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease-in),
+              transform 0.4s var(--ease-in);
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 36px;
+  position: relative;
+}
+
+/* Hemmalag – ljusblå sken från vänster */
+.team-a {
+  background: linear-gradient(90deg, rgba(var(--lb-500-rgb), 0.14) 0%, transparent 100%);
+}
+/* Bortalag – mörk navy från höger */
+.team-b {
+  background: linear-gradient(270deg, rgba(var(--dark-blue-rgb), 0.65) 0%, transparent 100%);
+}
+
+.team-name {
+  font-family: var(--font-name);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.score {
+  font-family: var(--font-display);
+  font-size: 3.8rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  min-width: 64px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition: transform 0.22s var(--ease-snap),
+              color 0.3s var(--ease-out),
+              text-shadow 0.3s var(--ease-out);
+  text-shadow: 0 0 24px rgba(var(--lb-900-rgb), 0.25);
+}
+
+/* Bump-animation vid mål: skalas upp + neon-flash */
+.score.bump {
+  transform: scale(1.28);
+  color: var(--accent-hi);
+  text-shadow: 0 0 32px rgba(var(--lb-900-rgb), 0.7),
+               0 0 64px rgba(var(--lb-900-rgb), 0.35);
+}
+
+.divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  border-left:  1px solid var(--border-soft);
+  border-right: 1px solid var(--border-soft);
+  background: rgba(var(--lb-500-rgb), 0.04);
+  min-width: 140px;
+}
+
+.period {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  text-align: center;
+  white-space: nowrap;
+  transition: margin 0.45s var(--ease-out),
+              font-size 0.45s var(--ease-out);
+}
+
+.clock {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* Smooth dölj/visa-animation via .clock-hidden på #scoreboard */
+  max-height: 3rem;
+  opacity: 1;
+  transform: scaleY(1);
+  transform-origin: top center;
+  overflow: hidden;
+  transition: color 0.3s var(--ease-out),
+              text-shadow 0.3s var(--ease-out),
+              max-height 0.45s var(--ease-out),
+              opacity 0.3s var(--ease-out),
+              transform 0.45s var(--ease-snap);
+}
+
+/* Dölj klockan: animera ner till 0 + period centreras */
+#scoreboard.clock-hidden .clock {
+  max-height: 0;
+  opacity: 0;
+  transform: scaleY(0);
+}
+
+#scoreboard.clock-hidden .period {
+  margin-bottom: 0;
+  font-size: 0.95rem;       /* periodtexten växer lite när den ensam står */
+  letter-spacing: 0.18em;
+}
+
+.clock.running {
+  color: var(--accent-hi);
+  text-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.55);
+}
+
+/* Kolonen pulserar när klockan löper – signatur av "match igång" */
+.clock .colon {
+  /* default: full opacitet */
+}
+.clock.running .colon {
+  animation: clockColonPulse 1s infinite ease-in-out;
+}
+
+@keyframes clockColonPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.22; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CENTRERAD GRAFIK – gemensam glasmorf-bas + staggered animation
+═══ */
+.center-graphic {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+
+  /* Standardläge (dolt): något under center + nedskalad */
+  transform: translate(-50%, calc(-50% + 24px)) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
+
+  background: var(--glass-bg-deep);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+
+  /* EXIT: snabb, ingen delay – panelen åker bort efter att texten tonat ut */
+  transition: opacity 0.4s var(--ease-in),
+              transform 0.45s var(--ease-in);
+  transition-delay: 0.18s;
+  will-change: opacity, transform;
+}
+
+.center-graphic.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+
+  /* ENTER: snärt in (overshoot) – panelen glider in först */
+  transition: opacity 0.45s var(--ease-out),
+              transform 0.55s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TJOCKARE BAKGRUND FÖR INNEHÅLLSTUNGA GRAFIKER
+   Scoreboard, kommentator och matchup behåller sin lättare glasmorf.
+   Dessa tre (tabell, uppställningar, fixtures) får mer opacitet eftersom
+   texten är liten och rörlig sport-video bakom annars stör läsbarheten.
+═══ */
+.lineup-panel,
+.table-graphic,
+.fixtures-panel {
+  background: linear-gradient(160deg,
+              rgba(10, 16, 26, 0.96) 0%,
+              rgba(4, 10, 18, 0.98) 100%);
+  /* Något starkare drop-shadow så panelen ser ut att vila ovanpå spelet */
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7),
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+              0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
+/* Delad animerad ljuslinje för tabell + omgångens matcher
+   (samma broadcast-känsla som lineup/matchup). */
+@property --panel-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.table-graphic::before,
+.fixtures-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--panel-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: panelTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+@keyframes panelTraveler {
+  to { --panel-angle: 360deg; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LAGUPPSTÄLLNINGAR
+═══ */
+
+/* @property krävs för att animera vinkel-baserad conic-gradient. */
+@property --lineup-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.lineup-panel {
+  width: 1100px;
+  max-width: 94vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Animerad ljuslinje som "vandrar" runt kanten kontinuerligt – samma
+   broadcast-känsla som matchup-skylten. Conic-gradient med en smal ljus
+   sektion som roterar; mask-composite klipper bort insidan så bara en
+   tunn ram blir synlig. */
+.lineup-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--lineup-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: lineupTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+@keyframes lineupTraveler {
+  to { --lineup-angle: 360deg; }
+}
+
+.lineup-inner {
+  padding: 40px 52px 36px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Stagger: panelen kommer in först, sen barnen i .lineup-inner */
+.lineup-inner > * {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.4s var(--ease-snap);
+  transition-delay: 0s;          /* EXIT: omedelbart */
+}
+
+.lineup-panel.visible .lineup-inner > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Specifika delays per barn-element (TV-studio-känsla) */
+.lineup-panel.visible .lineup-label    { transition-delay: 0.30s; }
+.lineup-panel.visible .lineup-teamname { transition-delay: 0.38s; }
+.lineup-panel.visible .lineup-grid     { transition-delay: 0.46s; }
+.lineup-panel.visible .lineup-leaders  { transition-delay: 0.54s; }
+
+.lineup-label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.lineup-teamname {
+  font-family: var(--font-name);
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 22px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lineup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 52px;
+  row-gap: 0;
+  overflow: hidden;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+  /* Bas-state: dold tills panelen blir .visible */
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.player-row:last-child { border-bottom: none; }
+
+/* Spelarna kaskadar in EFTER att .lineup-grid är klar */
+.lineup-panel.visible .player-row {
+  animation: playerCascade 0.42s var(--ease-snap) forwards;
+  /* per-rad delay sätts inline från renderLineup() */
+}
+
+@keyframes playerCascade {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.player-num {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.player-name {
+  font-family: var(--font-name);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Ledare/staff i lineup-panel ─────────────────────────────────────── */
+.lineup-leaders {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border-accent);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 52px;
+  row-gap: 6px;
+}
+
+.lineup-leaders:empty { display: none; }
+
+.leader-row {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.leader-role {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  min-width: var(--leader-role-width, 140px);
+  text-align: right;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.leader-name {
+  font-family: var(--font-name);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGATABELL
+═══ */
+.table-graphic {
+  width: 1240px;
+  max-width: 94vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-header {
+  padding: 18px 32px 14px;
+  border-bottom: 1px solid var(--border-accent);
+  background: linear-gradient(180deg,
+              rgba(var(--lb-500-rgb), 0.10) 0%,
+              transparent 100%);
+  position: relative;
+}
+
+/* Glödande underlinje under header – speglar scoreboardens neon-stripe */
+.table-header::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              var(--accent-hi) 50%,
+              transparent 100%);
+  box-shadow: var(--accent-glow);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Stagger: header först, sen tabellen */
+.table-graphic > .table-header,
+.table-graphic > .standings-table {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.4s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+.table-graphic.visible > .table-header,
+.table-graphic.visible > .standings-table {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.table-graphic.visible > .table-header    { transition-delay: 0.28s; }
+.table-graphic.visible > .standings-table { transition-delay: 0.40s; }
+
+.table-eyebrow {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.table-title {
+  font-family: var(--font-name);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+}
+
+.standings-table thead tr {
+  background: rgba(var(--lb-500-rgb), 0.07);
+}
+
+.standings-table th {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 12px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-accent);
+}
+
+.standings-table th.col-num,
+.standings-table td.col-num,
+.standings-table th.col-diff,
+.standings-table td.col-diff,
+.standings-table th.col-record,
+.standings-table td.col-record,
+.standings-table th.col-logo,
+.standings-table td.col-logo { text-align: center; }
+
+.standings-table td {
+  padding: 9px 12px;
+  font-size: 1.15rem;
+  color: var(--text-strong);
+  border-bottom: 1px solid var(--border-soft);
+  font-weight: 500;
+}
+
+/* Större kant-padding på första/sista cellen för luftighet */
+.standings-table th:first-child,
+.standings-table td:first-child { padding-left: 36px; }
+.standings-table th:last-child,
+.standings-table td:last-child  { padding-right: 36px; }
+
+.standings-table tbody tr:last-child td { border-bottom: none; }
+.standings-table tbody tr:nth-child(even) td {
+  background: rgba(var(--lb-500-rgb), 0.035);
+}
+
+.col-logo   { width: 56px; }
+.col-pos    { width: 50px; }
+.col-team   { width: auto; }
+.col-num    { width: 56px; }
+.col-record { width: 100px; }
+.col-diff   { width: 76px; }
+
+.td-pos {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-strong);   /* alla positioner vita */
+  font-variant-numeric: tabular-nums;
+}
+
+.td-team {
+  font-family: var(--font-name);
+  font-weight: 700;
+  color: var(--text-strong);
+  font-size: 1.1rem;
+}
+
+.td-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-soft);
+  font-size: 1.15rem;
+}
+
+.td-points {
+  font-weight: 700;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+
+/* Klubbens logotyp – större för läsbarhet i broadcast */
+.team-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5));
+}
+
+/* Tabellrader kaskadar in EFTER att tabellen är synlig */
+.table-graphic tbody tr {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.table-graphic.visible tbody tr {
+  animation: rowCascade 0.42s var(--ease-snap) forwards;
+  /* per-rad delay sätts inline från renderTable() */
+}
+
+@keyframes rowCascade {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OMGÅNGENS MATCHER (Fixtures)
+═══ */
+.fixtures-panel {
+  width: 1200px;
+  max-width: 94vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header staggered – samma mönster som table-graphic */
+.fixtures-panel > .table-header,
+.fixtures-panel > .fixtures-list {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.4s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+.fixtures-panel.visible > .table-header  { opacity: 1; transform: translateY(0); transition-delay: 0.28s; }
+.fixtures-panel.visible > .fixtures-list { opacity: 1; transform: translateY(0); transition-delay: 0.40s; }
+
+.fixtures-list {
+  padding: 18px 40px 32px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fixture-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  /* Bas-state: dold tills panelen är visible */
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.fixture-row:last-child { border-bottom: none; }
+
+/* Kaskad-animation EFTER att panelen visas (delay sätts inline per rad) */
+.fixtures-panel.visible .fixture-row {
+  animation: rowCascade 0.45s var(--ease-snap) forwards;
+}
+
+.fix-side {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;        /* tillåt ellipsis i flexbox */
+}
+
+.fix-side-home {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.fix-side-away {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.fix-team-name {
+  font-family: var(--font-name);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+}
+
+.fix-team-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5));
+}
+
+/* Mitt-cellen: resultat eller tid */
+.fix-middle {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  min-width: 150px;
+  padding: 0 12px;
+}
+
+.fix-result {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+}
+
+.fix-time {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.fix-time-date {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+/* Vinnaren tonas i highlight-blå när matchen är spelad */
+.fix-result .fix-score-winner {
+  color: var(--accent-hi);
+  text-shadow: 0 0 12px rgba(var(--lb-900-rgb), 0.4);
+}
+
+.fix-result .fix-score-sep {
+  margin: 0 6px;
+  color: var(--text-faint);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KOMMENTATOR-SKYLT (Lower-third nere till vänster)
+═══ */
+@property --commentators-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.commentators-panel {
+  position: fixed;
+  left: 48px;
+  bottom: 48px;
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 12px;
+  box-shadow: var(--glass-shadow);
+
+  /* Bas-state: dold, glider in från vänster */
+  opacity: 0;
+  transform: translateX(-32px) scale(0.97);
+  pointer-events: none;
+
+  /* EXIT */
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.4s var(--ease-in);
+  transition-delay: 0.18s;
+  will-change: opacity, transform;
+}
+
+.commentators-panel.visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+  transition: opacity 0.45s var(--ease-out),
+              transform 0.55s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+/* Animerad ljuslinje som "vandrar" runt kanten kontinuerligt – matchar
+   matchup-/lineup-/tabell-panelernas tracing-effekt. */
+.commentators-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--commentators-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: commentatorsTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+@keyframes commentatorsTraveler {
+  to { --commentators-angle: 360deg; }
+}
+
+/* Den statiska accent-strimlan är ersatt av den animerade tracing-linjen
+   ovan. Behåller div:en i HTML men gömmer den så animationen syns runt
+   hela boxen i stället för att domineras av en stillastående topplinje. */
+.commentators-accent {
+  display: none;
+}
+
+.commentators-inner {
+  padding: 22px 30px 24px;
+}
+
+.commentators-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+
+  /* Staggered: tonas in efter panelen */
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.3s var(--ease-out);
+  transition-delay: 0s;
+}
+
+.commentators-panel.visible .commentators-label {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.28s;
+}
+
+.commentators-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.commentator-name {
+  font-family: var(--font-name);
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.35s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+.commentator-name:empty { display: none; }
+
+.commentators-panel.visible .commentator-name:nth-child(1) {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.36s;
+}
+.commentators-panel.visible .commentator-name:nth-child(2) {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.44s;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MATCHUP-SKYLT (Inför/Paus) – minimalistisk premium broadcast-design
+   • Nästan transparent bakgrund, tunn glasremsa
+   • Animerad ljuslinje som tracerar boxens kant kontinuerligt
+   • Lagen glider in från sidorna, VS fadar in i mitten
+═══ */
+
+/* @property krävs för att animera en CSS-custom-property som vinkel.
+   Stöds av modern Chrome/CEF (inkl. OBS Browser Source 28+). */
+@property --matchup-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.matchup-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 10vh;
+  transform: translateX(-50%);
+  width: min(1500px, 94vw);
+  padding: 38px 80px 28px;
+  border-radius: 18px;
+
+  /* Mörk frosted-glass-remsa för läsbarhet mot rörligt spel */
+  background: linear-gradient(180deg,
+              rgba(4, 10, 20, 0.78) 0%,
+              rgba(2, 6, 14, 0.88) 100%);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+
+  opacity: 0;
+  pointer-events: none;
+
+  /* Exit – snabb */
+  transition: opacity 0.35s var(--ease-in);
+  will-change: opacity;
+}
+
+.matchup-panel.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.55s var(--ease-out);
+}
+
+/* Animerad ljuslinje som "vandrar" runt kanten kontinuerligt.
+   Konisk gradient med en smal ljus sektion som roterar. Mask-composite
+   klipper bort insidan så bara en tunn ram blir synlig. */
+.matchup-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--matchup-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: matchupTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+@keyframes matchupTraveler {
+  to { --matchup-angle: 360deg; }
+}
+
+/* Eyebrow med division/serie överst */
+.matchup-eyebrow {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--sollentuna-lb-500);
+  margin-bottom: 30px;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.85),
+               0 1px 3px rgba(0, 0, 0, 0.7);
+  display: block;
+}
+.matchup-eyebrow:empty { display: none; }
+
+/* Hovedlinjen: [home-logo  home-name]  VS  [away-name  away-logo] */
+.matchup-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 40px;
+  margin-bottom: 28px;
+}
+
+.matchup-team {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  min-width: 0;
+}
+
+/* Hemmalag-block: logo (vänster) ___ namn (mot center) */
+.matchup-team-home {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* Bortalag-block: namn (mot center) ___ logo (höger) */
+.matchup-team-away {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.matchup-logo-wrap {
+  width: 130px;
+  height: 130px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.matchup-logo-wrap img {
+  width: 130px;
+  height: 130px;
+  object-fit: contain;
+}
+
+.matchup-logo-placeholder {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(var(--lb-500-rgb), 0.1);
+  border: 2px solid rgba(var(--lb-500-rgb), 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 3.6rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.matchup-team-name {
+  font-family: var(--font-name);
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--sollentuna-white);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  min-width: 0;
+  /* Mjuk men tydlig text-shadow för att poppa mot rörligt spel */
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.85),
+               0 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+/* Avdelaren – stilrent "VS" i Sollentuna-ljusblå */
+.matchup-vs {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--sollentuna-lb-500);
+  letter-spacing: 0.24em;
+  padding: 0 12px;
+  text-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.55),
+               0 4px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Arena/extrainfo – diskret, centrerat under */
+.matchup-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.matchup-meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.matchup-meta-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(var(--lb-500-rgb), 0.55);
+}
+
+.matchup-meta-label {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--sollentuna-lb-500);
+  text-transform: uppercase;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95),
+               0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.matchup-meta-value {
+  font-family: var(--font-name);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--sollentuna-white);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95),
+               0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Staggered ENTER-animationer ─────────────────────────────────────
+   Hemmalag glider in från vänster, bortalag från höger, VS fadar in i
+   mitten strax efter. Eyebrow + meta tonas in sist. */
+.matchup-eyebrow,
+.matchup-meta,
+.matchup-team-home,
+.matchup-team-away,
+.matchup-vs {
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out),
+              transform 0.55s var(--ease-snap);
+  transition-delay: 0s;     /* EXIT – allt går ut samtidigt och snabbt */
+}
+
+.matchup-team-home { transform: translateX(-60px); }
+.matchup-team-away { transform: translateX( 60px); }
+.matchup-vs        { transform: scale(0.6); }
+.matchup-eyebrow,
+.matchup-meta      { transform: translateY(12px); }
+
+.matchup-panel.visible .matchup-eyebrow,
+.matchup-panel.visible .matchup-meta,
+.matchup-panel.visible .matchup-team-home,
+.matchup-panel.visible .matchup-team-away,
+.matchup-panel.visible .matchup-vs {
+  opacity: 1;
+  transform: translateX(0) translateY(0) scale(1);
+}
+
+.matchup-panel.visible .matchup-eyebrow    { transition-delay: 0.55s; }
+.matchup-panel.visible .matchup-team-home  { transition-delay: 0.15s; }
+.matchup-panel.visible .matchup-team-away  { transition-delay: 0.15s; }
+.matchup-panel.visible .matchup-vs         { transition-delay: 0.40s; }
+.matchup-panel.visible .matchup-meta       { transition-delay: 0.65s; }
+
+/* ═══ PAUSVILA / INTERMISSION-skylt ════════════════════════════════════
+   Samma box-DNA som matchup-skylten:
+     • Mörk frosted-glass-platta
+     • Animerad ljuslinje som tracerar runt boxens kant
+     • Hemmalag glider in från vänster, bortalag från höger, VS skalas in
+   Skillnaden mot matchup:
+     • Eyebrow är "PAUSVILA" i större, blå font (skyltens huvudrubrik)
+     • Meta-raden är en enda centrerad text "VI VÄNTAR PÅ …" – ingen
+       label/divider, ingen venue/start.
+═══ */
+.intermission-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 10vh;
+  transform: translateX(-50%);
+  width: min(1500px, 94vw);
+  padding: 38px 80px 28px;
+  border-radius: 18px;
+
+  /* Identisk frosted-glass-platta som matchup-skylten */
+  background: linear-gradient(180deg,
+              rgba(4, 10, 20, 0.78) 0%,
+              rgba(2, 6, 14, 0.88) 100%);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+
+  opacity: 0;
+  pointer-events: none;
+
+  transition: opacity 0.35s var(--ease-in);
+  will-change: opacity;
+}
+
+.intermission-panel.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.55s var(--ease-out);
+}
+
+/* Animerad ljuslinje – identisk med matchup-skylten. Använder samma
+   --matchup-angle @property + matchupTraveler-keyframe så vi inte
+   duplicerar en hel animation. */
+.intermission-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--matchup-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: matchupTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+/* PAUSVILA-eyebrow – skyltens huvudrubrik. Större och tydligare än
+   matchup-eyebrow eftersom det här är skyltens identitet, inte bara
+   en serielabel. */
+.intermission-eyebrow {
+  display: block;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--sollentuna-lb-500);
+  margin-bottom: 24px;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.85),
+               0 2px 4px  rgba(0, 0, 0, 0.7),
+               0 0 22px   rgba(var(--lb-900-rgb), 0.45);
+}
+
+/* Layout-grid: [home-logo  home-name]  VS  [away-name  away-logo].
+   Identisk struktur som matchup-row. */
+.intermission-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 40px;
+  margin-bottom: 28px;
+}
+
+.intermission-team {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  min-width: 0;
+}
+
+.intermission-team-home {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.intermission-team-away {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.intermission-logo-wrap {
+  width: 130px;
+  height: 130px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intermission-logo-wrap img {
+  width: 130px;
+  height: 130px;
+  object-fit: contain;
+}
+
+/* Återanvänder samma placeholder-look som matchup för konsekvens */
+.intermission-logo-wrap .matchup-logo-placeholder {
+  width: 130px;
+  height: 130px;
+}
+
+.intermission-team-name {
+  font-family: var(--font-name);
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--sollentuna-white);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  min-width: 0;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.85),
+               0 2px 4px  rgba(0, 0, 0, 0.7);
+}
+
+/* VS-divider – identisk med matchup-skylten */
+.intermission-vs {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--sollentuna-lb-500);
+  letter-spacing: 0.24em;
+  padding: 0 12px;
+  text-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.55),
+               0 4px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Meta-rad – bara den dynamiska "VI VÄNTAR PÅ …"-texten centrerat.
+   Använder samma vertikala plats som matchup-meta så skyltarna
+   "andas" lika. */
+.intermission-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.intermission-waiting {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sollentuna-white);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95),
+               0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Staggered ENTER-animationer (matchar matchup-skylten exakt) ─── */
+.intermission-eyebrow,
+.intermission-meta,
+.intermission-team-home,
+.intermission-team-away,
+.intermission-vs {
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out),
+              transform 0.55s var(--ease-snap);
+  transition-delay: 0s;  /* EXIT – allt går ut samtidigt och snabbt */
+}
+
+.intermission-team-home { transform: translateX(-60px); }
+.intermission-team-away { transform: translateX( 60px); }
+.intermission-vs        { transform: scale(0.6); }
+.intermission-eyebrow,
+.intermission-meta      { transform: translateY(12px); }
+
+.intermission-panel.visible .intermission-eyebrow,
+.intermission-panel.visible .intermission-meta,
+.intermission-panel.visible .intermission-team-home,
+.intermission-panel.visible .intermission-team-away,
+.intermission-panel.visible .intermission-vs {
+  opacity: 1;
+  transform: translateX(0) translateY(0) scale(1);
+}
+
+.intermission-panel.visible .intermission-eyebrow   { transition-delay: 0.55s; }
+.intermission-panel.visible .intermission-team-home { transition-delay: 0.15s; }
+.intermission-panel.visible .intermission-team-away { transition-delay: 0.15s; }
+.intermission-panel.visible .intermission-vs        { transition-delay: 0.40s; }
+.intermission-panel.visible .intermission-meta      { transition-delay: 0.65s; }

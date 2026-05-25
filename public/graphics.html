@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoreboard – Grafik</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/graphics.css">
+</head>
+<body>
+
+  <!-- ── Poängtavla ───────────────────────────────────────────────────────── -->
+  <div id="scoreboard">
+    <div class="team team-a">
+      <span class="team-name" id="teamA">Lag A</span>
+      <span class="score" id="scoreA">0</span>
+    </div>
+    <div class="divider">
+      <div class="period" id="period">P1</div>
+      <div class="clock" id="clock">00:00</div>
+    </div>
+    <div class="team team-b">
+      <span class="score" id="scoreB">0</span>
+      <span class="team-name" id="teamB">Lag B</span>
+    </div>
+  </div>
+
+  <!-- ── Hemmalaguppställning – centrerat fokusläge ───────────────────────── -->
+  <aside id="lineup-home"
+         class="center-graphic lineup-panel"
+         aria-hidden="true">
+    <div class="lineup-inner">
+      <p class="lineup-label">HEMMALAG</p>
+      <h2 class="lineup-teamname" id="lineupHomeTitle">Lag A</h2>
+      <div class="lineup-grid" id="lineupHomeGrid"></div>
+      <div class="lineup-leaders" id="lineupHomeLeaders"></div>
+    </div>
+  </aside>
+
+  <!-- ── Bortalagsuppställning – centrerat fokusläge ──────────────────────── -->
+  <aside id="lineup-away"
+         class="center-graphic lineup-panel"
+         aria-hidden="true">
+    <div class="lineup-inner">
+      <p class="lineup-label">BORTALAG</p>
+      <h2 class="lineup-teamname" id="lineupAwayTitle">Lag B</h2>
+      <div class="lineup-grid" id="lineupAwayGrid"></div>
+      <div class="lineup-leaders" id="lineupAwayLeaders"></div>
+    </div>
+  </aside>
+
+  <!-- ── Omgångens matcher – centrerat fokusläge ─────────────────────────── -->
+  <div id="fixtures-graphic"
+       class="center-graphic fixtures-panel"
+       aria-hidden="true">
+    <div class="table-header">
+      <span class="table-eyebrow" id="fixturesEyebrow">OMGÅNGENS MATCHER</span>
+      <h2 class="table-title" id="fixturesTitle">Spelprogram</h2>
+    </div>
+    <div class="fixtures-list" id="fixturesList"></div>
+  </div>
+
+  <!-- ── Ligatabell – centrerat fokusläge ─────────────────────────────────── -->
+  <div id="table-graphic"
+       class="center-graphic table-graphic"
+       aria-hidden="true">
+    <div class="table-header">
+      <span class="table-eyebrow" id="tableEyebrow">INNEBANDY</span>
+      <h2 class="table-title">Tabell</h2>
+    </div>
+    <table class="standings-table">
+      <thead>
+        <tr>
+          <th class="col-logo" aria-label="Lagets logotyp"></th>
+          <th class="col-pos">#</th>
+          <th class="col-team">Lag</th>
+          <th class="col-num" title="Spelade matcher">S</th>
+          <th class="col-num" title="Vinster (inkl. SD)">V</th>
+          <th class="col-num" title="Oavgjorda">O</th>
+          <th class="col-num" title="Förluster">F</th>
+          <th class="col-record" title="Gjorda mål – insläppta mål">GM-IM</th>
+          <th class="col-diff" title="Målskillnad">MD</th>
+          <th class="col-num" title="Poäng">P</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── Kommentator-skylt (Lower-third, nere till vänster) ────────────── -->
+  <aside id="commentators-graphic"
+         class="commentators-panel"
+         aria-hidden="true">
+    <div class="commentators-accent"></div>
+    <div class="commentators-inner">
+      <span class="commentators-label">KOMMENTATORER</span>
+      <div class="commentators-names">
+        <div class="commentator-name" id="commentatorName1"></div>
+        <div class="commentator-name" id="commentatorName2"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Matchup-skylt (Inför/Paus) ─────────────────────────────────────── -->
+  <div id="matchup-graphic"
+       class="matchup-panel"
+       aria-hidden="true">
+    <span class="matchup-eyebrow" id="matchupCompetition"></span>
+
+    <div class="matchup-row">
+      <div class="matchup-team matchup-team-home">
+        <div class="matchup-logo-wrap" id="matchupHomeLogo"></div>
+        <span class="matchup-team-name" id="matchupHomeName">HEMMA</span>
+      </div>
+
+      <span class="matchup-vs">VS</span>
+
+      <div class="matchup-team matchup-team-away">
+        <span class="matchup-team-name" id="matchupAwayName">BORTA</span>
+        <div class="matchup-logo-wrap" id="matchupAwayLogo"></div>
+      </div>
+    </div>
+
+    <div class="matchup-meta">
+      <div class="matchup-meta-item">
+        <span class="matchup-meta-value" id="matchupVenue">—</span>
+      </div>
+      <div class="matchup-meta-divider"></div>
+      <div class="matchup-meta-item">
+        <span class="matchup-meta-label">Matchstart</span>
+        <span class="matchup-meta-value" id="matchupStart">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Pausvila-skylt (Intermission) ──────────────────────────────────── -->
+  <!-- Använder samma box som Matchup (mörk platta + animerad ljuslinje).
+       Struktur: PAUSVILA överst som eyebrow, lag+VS i mitten,
+       "VI VÄNTAR PÅ …" som dynamisk text i meta-fältet. -->
+  <div id="intermission-graphic"
+       class="intermission-panel"
+       aria-hidden="true">
+    <span class="intermission-eyebrow">PAUSVILA</span>
+
+    <div class="intermission-row">
+      <div class="intermission-team intermission-team-home">
+        <div class="intermission-logo-wrap" id="intermissionHomeLogo"></div>
+        <span class="intermission-team-name" id="intermissionHomeName">HEMMA</span>
+      </div>
+
+      <span class="intermission-vs">VS</span>
+
+      <div class="intermission-team intermission-team-away">
+        <span class="intermission-team-name" id="intermissionAwayName">BORTA</span>
+        <div class="intermission-logo-wrap" id="intermissionAwayLogo"></div>
+      </div>
+    </div>
+
+    <div class="intermission-meta">
+      <span class="intermission-waiting" id="intermissionWaiting">PAUS</span>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/graphics.js"></script>
+</body>
+</html>

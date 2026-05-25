@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stream Deck-rutter – Scoreboard</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/control.css">
+</head>
+<body class="docs-body">
+
+  <header class="docs-header-bar">
+    <div class="docs-header-inner">
+      <a href="control.html" class="header-btn">← Tillbaka till kontroll</a>
+      <h1>Stream Deck-rutter</h1>
+    </div>
+  </header>
+
+  <main class="docs-main">
+    <article class="dash-card docs-card">
+      <p class="card-hint">
+        Använd <strong>Open URL</strong>-actionen i Stream Deck och peka mot rutterna nedan.
+        Klicka på en rutt för att kopiera hela URL:en till urklipp.
+      </p>
+
+      <div class="api-base">
+        <span class="api-base-label">Bas-URL</span>
+        <code id="apiBaseUrl">http://localhost:3000</code>
+        <span id="apiCopyToast" class="api-copy-toast" hidden>Kopierat!</span>
+      </div>
+
+      <div class="docs-grid">
+
+        <div class="api-group">
+          <h3>Poäng</h3>
+          <table class="api-table">
+            <thead><tr><th>Rutt</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/score/home/add</code></td><td>Hemmalag +1</td></tr>
+              <tr><td><code class="api-route">/api/score/home/sub</code></td><td>Hemmalag −1</td></tr>
+              <tr><td><code class="api-route">/api/score/away/add</code></td><td>Bortalag +1</td></tr>
+              <tr><td><code class="api-route">/api/score/away/sub</code></td><td>Bortalag −1</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Klocka</h3>
+          <table class="api-table">
+            <thead><tr><th>Rutt</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/clock/start</code></td><td>Starta</td></tr>
+              <tr><td><code class="api-route">/api/clock/pause</code></td><td>Pausa</td></tr>
+              <tr><td><code class="api-route">/api/clock/reset</code></td><td>Nollställ</td></tr>
+              <tr><td><code class="api-route">/api/clock/toggle_visibility</code></td><td>Dölj/visa klockan</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Grafik</h3>
+          <table class="api-table">
+            <thead><tr><th>Rutt</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/graphic/scoreboard</code></td><td>Scoreboard</td></tr>
+              <tr><td><code class="api-route">/api/graphic/lineupHome</code></td><td>Hemmalag</td></tr>
+              <tr><td><code class="api-route">/api/graphic/lineupAway</code></td><td>Bortalag</td></tr>
+              <tr><td><code class="api-route">/api/graphic/table</code></td><td>Serietabell</td></tr>
+              <tr><td><code class="api-route">/api/graphic/fixtures</code></td><td>Omgångens matcher</td></tr>
+              <tr><td><code class="api-route">/api/graphic/commentators</code></td><td>Kommentatorer</td></tr>
+              <tr><td><code class="api-route">/api/graphic/commentators/toggle</code></td><td>Växla kommentatorer av/på</td></tr>
+              <tr><td><code class="api-route">/api/graphic/matchup</code></td><td>Inför/Paus</td></tr>
+              <tr><td><code class="api-route">/api/graphic/intermission</code></td><td>Pausvila (räknar ut nästa period)</td></tr>
+              <tr><td><code class="api-route">/api/graphic/clear</code></td><td>Göm allt</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Period &amp; Status</h3>
+          <table class="api-table">
+            <thead><tr><th>Rutt</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/period/next</code></td><td>Stega period (kapas vid 5)</td></tr>
+              <tr><td><code class="api-route">/api/period/reset</code></td><td>Period → 1</td></tr>
+              <tr><td><code class="api-route">/api/state</code></td><td>Hela state-snapshoten (JSON)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </article>
+  </main>
+
+  <script>
+    // Auto-fyll bas-URL utifrån värdens adress + click-för-att-kopiera på rutter.
+    document.getElementById('apiBaseUrl').textContent = window.location.origin;
+    const toast = document.getElementById('apiCopyToast');
+    document.addEventListener('click', async (e) => {
+      const codeEl = e.target.closest('.api-route');
+      if (!codeEl) return;
+      const fullUrl = window.location.origin + codeEl.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        toast.hidden = false;
+        clearTimeout(toast._t);
+        toast.style.animation = 'none';
+        void toast.offsetWidth;
+        toast.style.animation = '';
+        toast._t = setTimeout(() => { toast.hidden = true; }, 1400);
+      } catch (err) {
+        console.error('Kunde inte kopiera:', err);
+      }
+    });
+  </script>
+</body>
+</html>
