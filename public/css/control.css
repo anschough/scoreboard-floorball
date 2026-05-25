@@ -679,6 +679,194 @@ input[type="url"]:focus {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   UTVISNINGAR – Live-kort
+═══ */
+.penalty-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.penalty-side {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.penalty-side-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.penalty-side-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.penalty-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.penalty-add-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 1fr;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.penalty-jersey {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 6px;
+}
+
+.btn-penalty {
+  border: none;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 10px 6px;
+  transition: background 0.12s var(--ease-out),
+              transform 0.08s var(--ease-out),
+              box-shadow 0.12s var(--ease-out);
+  font-family: inherit;
+}
+.btn-penalty:active { transform: scale(0.96); }
+
+.btn-penalty-2 {
+  background: rgba(245, 166, 35, 0.18);
+  color: #ffc14a;
+  border: 1px solid rgba(245, 166, 35, 0.4);
+}
+.btn-penalty-2:hover {
+  background: rgba(245, 166, 35, 0.32);
+  box-shadow: 0 3px 12px rgba(245, 166, 35, 0.25);
+}
+
+.btn-penalty-5 {
+  background: rgba(255, 107, 107, 0.18);
+  color: #ff8d8d;
+  border: 1px solid rgba(255, 107, 107, 0.42);
+}
+.btn-penalty-5:hover {
+  background: rgba(255, 107, 107, 0.32);
+  box-shadow: 0 3px 12px rgba(255, 107, 107, 0.28);
+}
+
+.penalty-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 4px;
+}
+
+.penalty-list:empty::after {
+  content: 'Inga aktiva';
+  display: block;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 6px 0;
+  opacity: 0.6;
+}
+
+.penalty-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: rgba(255, 107, 107, 0.08);
+  border-left: 3px solid var(--err);
+  border-radius: 5px;
+  animation: penaltyRowIn 0.28s var(--ease-snap);
+}
+
+.penalty-row.is-removing {
+  animation: penaltyRowOut 0.22s var(--ease-out) forwards;
+}
+
+@keyframes penaltyRowIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes penaltyRowOut {
+  to { opacity: 0; transform: translateX(8px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+
+.penalty-row-jersey {
+  font-family: 'Readex Pro', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 26px;
+  text-align: center;
+}
+.penalty-row-jersey:empty::before {
+  content: '–';
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.penalty-row-time {
+  font-family: 'Readex Pro', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ff8d8d;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-penalty-remove {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--err);
+  font-size: 0.9rem;
+  font-weight: 700;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  line-height: 1;
+}
+.btn-penalty-remove:hover {
+  background: rgba(255, 107, 107, 0.18);
+  border-color: rgba(255, 107, 107, 0.5);
+}
+.btn-penalty-remove:active { transform: scale(0.9); }
+
+/* När live-kolumnen blir för smal: lägg sidorna under varandra */
+@media (max-width: 1180px) {
+  .penalty-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    PREVIEW-INNEHÅLL (uppställningar, tabell, fixtures)
 ═══ */
 .preview-box {

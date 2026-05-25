@@ -187,6 +187,44 @@
           </div>
         </article>
 
+        <article class="dash-card live-card penalty-card">
+          <h2>Utvisningar</h2>
+          <p class="card-hint">
+            Nedräkning sker i takt med matchklockan. Pausas automatiskt när klockan pausas.
+            Tröjnummer är frivilligt och visas i grafiken om angivet.
+          </p>
+          <div class="penalty-grid">
+            <div class="penalty-side" data-team="home">
+              <div class="penalty-side-header">
+                <span class="penalty-side-label">Hemma</span>
+                <span class="penalty-count" id="penaltyHomeCount">0 aktiva</span>
+              </div>
+              <div class="penalty-add-row">
+                <input type="text" id="inputPenaltyHomeJersey"
+                       class="penalty-jersey" placeholder="#"
+                       maxlength="3" aria-label="Tröjnummer hemma">
+                <button class="btn-penalty btn-penalty-2" data-team="home" data-minutes="2">+2 Min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="home" data-minutes="5">+5 Min</button>
+              </div>
+              <ul class="penalty-list" id="penaltyHomeList"></ul>
+            </div>
+            <div class="penalty-side" data-team="away">
+              <div class="penalty-side-header">
+                <span class="penalty-side-label">Borta</span>
+                <span class="penalty-count" id="penaltyAwayCount">0 aktiva</span>
+              </div>
+              <div class="penalty-add-row">
+                <input type="text" id="inputPenaltyAwayJersey"
+                       class="penalty-jersey" placeholder="#"
+                       maxlength="3" aria-label="Tröjnummer borta">
+                <button class="btn-penalty btn-penalty-2" data-team="away" data-minutes="2">+2 Min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="away" data-minutes="5">+5 Min</button>
+              </div>
+              <ul class="penalty-list" id="penaltyAwayList"></ul>
+            </div>
+          </div>
+        </article>
+
       </section>
 
 

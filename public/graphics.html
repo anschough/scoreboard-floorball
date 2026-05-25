@@ -9,20 +9,34 @@
 </head>
 <body>
 
-  <!-- ── Poängtavla ───────────────────────────────────────────────────────── -->
-  <div id="scoreboard">
-    <div class="team team-a">
-      <span class="team-name" id="teamA">Lag A</span>
-      <span class="score" id="scoreA">0</span>
+  <!-- ── Poängtavla + Utvisningar (Penalties) ──────────────────────────────
+       Flex-rad: [hemma-utvisningar] [scoreboard] [borta-utvisningar].
+       Tack vare justify-content: center sitter utvisningsstackarna alltid
+       direkt intill scoreboardens kanter oavsett lagnamn-bredd, utan att
+       täcka centrum av bilden. ────────────────────────────────────────── -->
+  <div class="scoreboard-row">
+    <div id="penalties-home"
+         class="penalty-stack penalty-stack-home"
+         aria-hidden="true"></div>
+
+    <div id="scoreboard">
+      <div class="team team-a">
+        <span class="team-name" id="teamA">Lag A</span>
+        <span class="score" id="scoreA">0</span>
+      </div>
+      <div class="divider">
+        <div class="period" id="period">P1</div>
+        <div class="clock" id="clock">00:00</div>
+      </div>
+      <div class="team team-b">
+        <span class="score" id="scoreB">0</span>
+        <span class="team-name" id="teamB">Lag B</span>
+      </div>
     </div>
-    <div class="divider">
-      <div class="period" id="period">P1</div>
-      <div class="clock" id="clock">00:00</div>
-    </div>
-    <div class="team team-b">
-      <span class="score" id="scoreB">0</span>
-      <span class="team-name" id="teamB">Lag B</span>
-    </div>
+
+    <div id="penalties-away"
+         class="penalty-stack penalty-stack-away"
+         aria-hidden="true"></div>
   </div>
 
   <!-- ── Hemmalaguppställning – centrerat fokusläge ───────────────────────── -->
