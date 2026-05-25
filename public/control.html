@@ -170,8 +170,16 @@
           <div class="clock-display-xl" id="displayClock">00:00</div>
           <div class="clock-controls-xl">
             <button id="btnStart" class="btn-clock-xl btn-start">Start</button>
-            <button id="btnPause" class="btn-clock-xl btn-pause" disabled>Paus</button>
+            <button id="btnPause" class="btn-clock-xl btn-pause" disabled>Stop</button>
             <button id="btnReset" class="btn-clock-xl btn-reset">Återställ</button>
+          </div>
+          <div class="clock-adjust-row" role="group" aria-label="Justera matchtid manuellt">
+            <button id="btnClockPlus"  class="btn-clock-adjust" title="Lägg till 1 sekund">+1 s</button>
+            <button id="btnClockMinus" class="btn-clock-adjust" title="Dra bort 1 sekund">−1 s</button>
+            <input id="inputClockSet" class="input-clock-set" type="text" inputmode="numeric"
+                   placeholder="MM:SS" maxlength="5"
+                   aria-label="Justera matchklockan (MM:SS)">
+            <button id="btnClockSet" class="btn-clock-set" title="Justera tid från fältet">Justera tid</button>
           </div>
           <button id="btnToggleClock" class="btn btn-secondary full-width">Dölj klockan</button>
         </article>

@@ -327,6 +327,50 @@ btnPause.addEventListener('click', () => socket.emit('clockPause'));
 btnReset.addEventListener('click', () => socket.emit('clockReset'));
 btnToggleClock.addEventListener('click', () => socket.emit('toggleClockVisibility'));
 
+/** Manuell tidsjustering – ±1 s eller absolut MM:SS via textfältet */
+const btnClockMinus = document.getElementById('btnClockMinus');
+const btnClockPlus  = document.getElementById('btnClockPlus');
+const btnClockSet   = document.getElementById('btnClockSet');
+const inputClockSet = document.getElementById('inputClockSet');
+
+btnClockMinus.addEventListener('click', () => socket.emit('clockAdjust', { delta: -1 }));
+btnClockPlus .addEventListener('click', () => socket.emit('clockAdjust', { delta:  1 }));
+
+/** Parse "MM:SS" eller "M:SS" → totala sekunder. Returnerar null vid ogiltigt. */
+function parseMMSS(value) {
+  const m = (value || '').trim().match(/^(\d{1,2}):([0-5]?\d)$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+function applyClockSet() {
+  const sec = parseMMSS(inputClockSet.value);
+  if (sec == null) {
+    // Visuell feedback för ogiltigt format
+    inputClockSet.classList.add('input-error');
+    inputClockSet.focus();
+    inputClockSet.select();
+    setTimeout(() => inputClockSet.classList.remove('input-error'), 700);
+    return;
+  }
+  socket.emit('clockSet', { seconds: sec });
+  inputClockSet.value = '';
+  inputClockSet.blur();
+}
+
+btnClockSet.addEventListener('click', applyClockSet);
+inputClockSet.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); applyClockSet(); }
+});
+// När fältet får fokus: förifyll med nuvarande klocktid så det är lätt att
+// finjustera istället för att skriva från noll.
+inputClockSet.addEventListener('focus', () => {
+  if (!inputClockSet.value) {
+    inputClockSet.value = displayClock.textContent || '';
+    inputClockSet.select();
+  }
+});
+
 /** Uppdaterar knappens text + visuella state baserat på clockVisible */
 function updateClockToggleButton(visible) {
   if (visible) {
