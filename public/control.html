@@ -20,19 +20,15 @@
           <h1>FBC Sollentuna Graphic Broadcast</h1>
         </div>
         <div class="header-meta">
-          <span class="on-air-pill">
-            <span class="on-air-dot"></span>
-            <span class="on-air-label">ON AIR</span>
-            <span id="activeGraphicIndicator" class="on-air-value">Scoreboard</span>
-          </span>
           <span id="connection-status" class="status disconnected"
                 role="status" aria-live="polite">Ansluter…</span>
           <a href="graphics.html" target="_blank" rel="noopener" class="header-btn header-btn-graphics"
              title="Öppna grafik-lagret i en ny flik (för förhandsvisning eller OBS Browser Source-test)">
             Öppna grafik<span class="visually-hidden"> (öppnas i ny flik)</span>
           </a>
-          <a href="api-docs.html" target="_blank" rel="noopener" class="header-btn">
-            Stream Deck shortcuts<span class="visually-hidden"> (öppnas i ny flik)</span>
+          <a href="settings.html" target="_blank" rel="noopener" class="header-btn"
+             title="Hantera sponsorlogotyper och Stream Deck-genvägar">
+            Inställningar<span class="visually-hidden"> (öppnas i ny flik)</span>
           </a>
         </div>
       </div>
@@ -220,8 +216,10 @@
                 <input type="text" id="inputPenaltyHomeJersey"
                        class="penalty-jersey" placeholder="#"
                        maxlength="3" aria-label="Tröjnummer hemma">
-                <button class="btn-penalty btn-penalty-2" data-team="home" data-minutes="2">+2 Min</button>
-                <button class="btn-penalty btn-penalty-5" data-team="home" data-minutes="5">+5 Min</button>
+                <button class="btn-penalty btn-penalty-2" data-team="home" data-minutes="2">2 Min</button>
+                <button class="btn-penalty btn-penalty-22" data-team="home" data-kind="double"
+                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 Min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="home" data-minutes="5">5 Min</button>
               </div>
               <ul class="penalty-list" id="penaltyHomeList"
                   aria-label="Aktiva utvisningar – Hemma"></ul>
@@ -235,8 +233,10 @@
                 <input type="text" id="inputPenaltyAwayJersey"
                        class="penalty-jersey" placeholder="#"
                        maxlength="3" aria-label="Tröjnummer borta">
-                <button class="btn-penalty btn-penalty-2" data-team="away" data-minutes="2">+2 Min</button>
-                <button class="btn-penalty btn-penalty-5" data-team="away" data-minutes="5">+5 Min</button>
+                <button class="btn-penalty btn-penalty-2" data-team="away" data-minutes="2">2 Min</button>
+                <button class="btn-penalty btn-penalty-22" data-team="away" data-kind="double"
+                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 Min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="away" data-minutes="5">5 Min</button>
               </div>
               <ul class="penalty-list" id="penaltyAwayList"
                   aria-label="Aktiva utvisningar – Borta"></ul>

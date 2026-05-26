@@ -420,6 +420,14 @@ h2 {
 }
 .card-hint strong { color: var(--accent); font-weight: 700; }
 
+/* Dölj hint:en på laguppställnings-kortet tills data är hämtad från IBIS –
+   "Klicka på namnet …" är meningslös innan det finns några namn att klicka
+   på. När fetch landar tas [hidden] bort från #previewInnebandyLineup av
+   control.js och hint:en dyker upp. */
+.scroll-card:has(#previewInnebandyLineup[hidden]) > .card-hint {
+  display: none;
+}
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    FORMULÄR
@@ -845,7 +853,7 @@ input[type="text"].input-clock-set.input-error {
 
 .penalty-add-row {
   display: grid;
-  grid-template-columns: 52px 1fr 1fr;
+  grid-template-columns: 52px 1fr 1fr 1fr;
   gap: 6px;
   align-items: stretch;
 }
@@ -880,6 +888,18 @@ input[type="text"].input-clock-set.input-error {
 .btn-penalty-2:hover {
   background: rgba(245, 166, 35, 0.32);
   box-shadow: 0 3px 12px rgba(245, 166, 35, 0.25);
+}
+
+/* 2+2 – samma orange-familj som +2 men något djupare så den känns som
+   en "större variant". Indikerar att två utvisningar läggs samtidigt. */
+.btn-penalty-22 {
+  background: rgba(245, 130, 35, 0.22);
+  color: #ffb277;
+  border: 1px solid rgba(245, 130, 35, 0.5);
+}
+.btn-penalty-22:hover {
+  background: rgba(245, 130, 35, 0.36);
+  box-shadow: 0 3px 12px rgba(245, 130, 35, 0.28);
 }
 
 .btn-penalty-5 {
@@ -928,6 +948,20 @@ input[type="text"].input-clock-set.input-error {
 
 .penalty-row.is-removing {
   animation: penaltyRowOut 0.22s var(--ease-out) forwards;
+}
+
+/* Köad utvisning – tickas inte än, döljs i grafiken. Vi visar den i
+   kontrollpanelen så operatören vet vad som väntar, men dämpad så det
+   är tydligt att den inte är i spel just nu. */
+.penalty-row.is-queued {
+  background: rgba(var(--lb-500-rgb), 0.06);
+  border-left-color: var(--text-muted);
+  opacity: 0.78;
+}
+.penalty-row.is-queued .penalty-row-time {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
 }
 
 @keyframes penaltyRowIn {

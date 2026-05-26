@@ -18,3 +18,7 @@ npm-debug.log*
 
 # Claude Code (personliga lokala inställningar)
 .claude/settings.local.json
+
+# Sponsorbilder + manifest (uppladdade per installation)
+data/
+public/sponsors/

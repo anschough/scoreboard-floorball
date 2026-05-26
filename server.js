@@ -2,11 +2,17 @@ const express = require('express');
 const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
+const fs      = require('fs');
+const crypto  = require('crypto');
 const axios   = require('axios');
 
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
+
+// JSON-parser för sponsor-uppladdningar (data-URL:er på upp till ~5 MB/st × 10).
+// Sätts före static så att API-rutterna nedan kan läsa req.body.
+app.use(express.json({ limit: '60mb' }));
 
 // Statiska filer (control.html, graphics.html, css, js).
 // Dev-läge: ingen cache så att ändringar slår igenom direkt utan hard refresh.
@@ -69,6 +75,104 @@ let graphicState = {
   activeGraphic: 'none'
 };
 
+// ── Sponsor-state ────────────────────────────────────────────────────────────
+// Sponsorer hanteras separat från matchState eftersom de bör persistera
+// mellan matcher och över serverstart. Filerna lagras i public/sponsors/ och
+// listan i data/sponsors.json. Max 15 logos.
+const SPONSORS_MAX        = 15;
+const SPONSORS_DIR        = path.join(__dirname, 'public', 'sponsors');
+const SPONSORS_DATA_DIR   = path.join(__dirname, 'data');
+const SPONSORS_MANIFEST   = path.join(SPONSORS_DATA_DIR, 'sponsors.json');
+const SPONSOR_MIME_EXT    = {
+  'image/png':  'png',
+  'image/jpeg': 'jpg',
+  'image/jpg':  'jpg',
+  'image/gif':  'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg'
+};
+
+let sponsorState = { sponsors: [] };  // [{ id, url, name }]
+
+function ensureSponsorDirs() {
+  if (!fs.existsSync(SPONSORS_DIR))      fs.mkdirSync(SPONSORS_DIR, { recursive: true });
+  if (!fs.existsSync(SPONSORS_DATA_DIR)) fs.mkdirSync(SPONSORS_DATA_DIR, { recursive: true });
+}
+
+function loadSponsors() {
+  ensureSponsorDirs();
+  if (!fs.existsSync(SPONSORS_MANIFEST)) return;
+  try {
+    const raw = fs.readFileSync(SPONSORS_MANIFEST, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.sponsors)) {
+      // Filtrera bort poster vars fil saknas (manuell rensning av public/sponsors/).
+      sponsorState.sponsors = parsed.sponsors
+        .filter(s => s && s.id && s.url)
+        .filter(s => {
+          const filePath = path.join(__dirname, 'public', s.url.replace(/^\//, ''));
+          return fs.existsSync(filePath);
+        });
+    }
+  } catch (err) {
+    console.error('[sponsors] kunde inte läsa manifest:', err.message);
+  }
+}
+
+function saveSponsorManifest() {
+  ensureSponsorDirs();
+  fs.writeFileSync(SPONSORS_MANIFEST, JSON.stringify(sponsorState, null, 2), 'utf8');
+}
+
+function broadcastSponsors() {
+  io.emit('sponsorsUpdate', sponsorState);
+}
+
+// Parsar en data-URL "data:image/png;base64,iVBORw0..." → { mime, buffer } eller null.
+function parseDataUrl(dataUrl) {
+  if (typeof dataUrl !== 'string') return null;
+  const m = dataUrl.match(/^data:([\w/+.-]+);base64,(.+)$/);
+  if (!m) return null;
+  const mime = m[1].toLowerCase();
+  if (!SPONSOR_MIME_EXT[mime]) return null;
+  try {
+    const buffer = Buffer.from(m[2], 'base64');
+    if (!buffer.length) return null;
+    return { mime, buffer };
+  } catch {
+    return null;
+  }
+}
+
+// Skriv en ny sponsorbild till disk och returnera { id, url, name }.
+function writeSponsorFile(parsed, originalName) {
+  const ext = SPONSOR_MIME_EXT[parsed.mime];
+  const id  = crypto.randomBytes(8).toString('hex');
+  const filename = `${id}.${ext}`;
+  const filePath = path.join(SPONSORS_DIR, filename);
+  fs.writeFileSync(filePath, parsed.buffer);
+  return {
+    id,
+    url:  `/sponsors/${filename}`,
+    name: (typeof originalName === 'string' && originalName.trim())
+            ? originalName.trim().slice(0, 80)
+            : ''
+  };
+}
+
+// Ta bort en sponsorfil från disk (best-effort, loggar fel).
+function deleteSponsorFile(url) {
+  if (!url) return;
+  const filePath = path.join(__dirname, 'public', url.replace(/^\//, ''));
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    console.error('[sponsors] kunde inte ta bort fil:', filePath, err.message);
+  }
+}
+
+loadSponsors();
+
 // Hjälpare – broadcasta hela matchState till alla anslutna klienter.
 const broadcastState = () => io.emit('stateUpdate', matchState);
 
@@ -96,22 +200,49 @@ function startClock() {
 }
 
 // ── Utvisningslogik ──────────────────────────────────────────────────────────
+// Modell: varje utvisning har status 'active' (tickar och syns i grafiken)
+// eller 'queued' (väntar tills en aktiv löper ut). Max MAX_ACTIVE_PENALTIES
+// aktiva per lag – kommer från regeln att man får spela max 3 mot 5 (alltså
+// 2 utvisningar samtidigt). 2+2-utvisning är två 2-min-poster där den andra
+// alltid läggs queued direkt, så grafiken bara visar EN box som räknar ner
+// 2:00 → byts mot en ny 2:00 när första går ut.
+//
 // Säker array-mutation: iterera BAKIFRÅN och splice. Då kan vi ta bort
 // element under iterationen utan att indexen skiftar – två utvisningar som
-// går ut på samma tick hanteras korrekt. broadcastIfChanged säkerställer att
-// vi bara pushar state när något faktiskt ändrats (annars varje sekund).
+// går ut på samma tick hanteras korrekt.
+const MAX_ACTIVE_PENALTIES = 2;
+
+function countActive(arr) {
+  let n = 0;
+  for (const p of arr) if (p.status === 'active') n++;
+  return n;
+}
+
+// Promota äldsta queued till active så länge det finns plats. Mutates arr.
+// Returnerar true om något ändrades så broadcast triggas.
+function promoteQueued(arr) {
+  let changed = false;
+  while (countActive(arr) < MAX_ACTIVE_PENALTIES) {
+    const next = arr.find(p => p.status === 'queued');
+    if (!next) break;
+    next.status    = 'active';
+    next.remaining = next.duration;  // queued-tid räknas inte med
+    changed = true;
+  }
+  return changed;
+}
+
 function tickPenaltyArray(arr) {
   let changed = false;
   for (let i = arr.length - 1; i >= 0; i--) {
-    arr[i].remaining -= 1;
-    if (arr[i].remaining <= 0) {
-      arr.splice(i, 1);
-      changed = true;
-    } else {
-      // remaining ändrades – broadcasta så grafiken kan rendera siffrorna.
-      changed = true;
-    }
+    const p = arr[i];
+    if (p.status !== 'active') continue;
+    p.remaining -= 1;
+    changed = true;
+    if (p.remaining <= 0) arr.splice(i, 1);
   }
+  // Fyll på från kön om en aktiv just löpte ut
+  if (promoteQueued(arr)) changed = true;
   return changed;
 }
 
@@ -723,6 +854,7 @@ io.on('connection', (socket) => {
   socket.emit('stateUpdate', matchState);
   socket.emit('graphicState', graphicState);
   socket.emit('clockStatus', { running: matchState.clockRunning });
+  socket.emit('sponsorsUpdate', sponsorState);
 
   // ── Poängtavla ───────────────────────────────────────────────────────────
   safeOn(socket, 'updateNames', ({ teamA, teamB, teamAShort, teamBShort } = {}) => {
@@ -914,8 +1046,14 @@ io.on('connection', (socket) => {
   });
 
   // ── Utvisningar ──────────────────────────────────────────────────────────
-  safeOn(socket, 'penaltyAdd', ({ team, minutes, jersey } = {}) => {
-    addPenalty(team, minutes, jersey);
+  // 'penaltyAdd' med kind === 'double' = 2+2-utvisning (två 2-min, andra
+  // alltid queued). Annars vanlig single-utvisning på `minutes` minuter.
+  safeOn(socket, 'penaltyAdd', ({ team, minutes, jersey, kind } = {}) => {
+    if (kind === 'double') {
+      addDoubleMinor(team, jersey);
+    } else {
+      addPenalty(team, minutes, jersey);
+    }
   });
   safeOn(socket, 'penaltyRemove', ({ team, id } = {}) => {
     removePenalty(team, id);
@@ -975,22 +1113,46 @@ function broadcastPenalties() {
   });
 }
 
-function addPenalty(team, minutes, jersey) {
+// addPenalty: forceQueued tvingar status='queued' oavsett aktivt-count
+// (används för andra halvan av 2+2 så den hamnar bakom första 2-min:en).
+function addPenalty(team, minutes, jersey, forceQueued = false) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
   const m = parseInt(minutes, 10);
   if (!ALLOWED_PENALTY_MINUTES.has(m)) return null;
 
   const duration = m * 60;
+  const isQueued = forceQueued || countActive(arr) >= MAX_ACTIVE_PENALTIES;
   const entry = {
     id:        ++penaltySeq,
     duration,
-    remaining: duration,
+    // queued-poster startar inte ticka – vi sätter remaining till duration
+    // när de promoteras (så de alltid får full tid när de aktiveras).
+    remaining: isQueued ? duration : duration,
+    status:    isQueued ? 'queued' : 'active',
     jersey:    typeof jersey === 'string' ? jersey.trim().slice(0, 3) : ''
   };
   arr.push(entry);
   broadcastPenalties();
   return entry;
+}
+
+// 2+2-utvisning: två 2-min-poster där den ANDRA alltid är queued direkt.
+// Första följer normala regler (active om det finns plats, annars queued).
+// Båda får samma pairId så grafiken kan rendera dem sida vid sida.
+function addDoubleMinor(team, jersey) {
+  const arr = penaltyArrayFor(team);
+  if (!arr) return null;
+  const first  = addPenalty(team, 2, jersey, false);
+  if (!first) return null;
+  const second = addPenalty(team, 2, jersey, true);
+  if (second) {
+    const pairId = `pair-${first.id}-${second.id}`;
+    first.pairId  = pairId;
+    second.pairId = pairId;
+    broadcastPenalties();
+  }
+  return { first, second };
 }
 
 function removePenalty(team, id) {
@@ -1001,6 +1163,8 @@ function removePenalty(team, id) {
   const idx = arr.findIndex(p => p.id === numId);
   if (idx === -1) return false;
   arr.splice(idx, 1);
+  // Om vi tog bort en aktiv ska nästa queued promoteras direkt.
+  promoteQueued(arr);
   broadcastPenalties();
   return true;
 }
@@ -1026,12 +1190,23 @@ function clearPenalties(team) {
 //   /api/penalty/home/remove?id=42
 //   /api/penalty/home/clear
 app.get('/api/penalty/:team/add', (req, res) => {
-  const team = req.params.team;
-  const entry = addPenalty(team, req.query.minutes, req.query.jersey);
+  const team   = req.params.team;
+  const jersey = req.query.jersey;
+  if (req.query.kind === 'double') {
+    const pair = addDoubleMinor(team, jersey);
+    if (!pair) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ogiltigt lag. Använd team=home eller team=away.'
+      });
+    }
+    return res.json({ success: true, penalties: [pair.first, pair.second] });
+  }
+  const entry = addPenalty(team, req.query.minutes, jersey);
   if (!entry) {
     return res.status(400).json({
       success: false,
-      error: 'Ogiltigt lag eller minuter. Använd minutes=2 eller minutes=5 och team=home/away.'
+      error: 'Ogiltigt lag eller minuter. Använd minutes=2/5 (+ ev. kind=double) och team=home/away.'
     });
   }
   res.json({ success: true, penalty: entry });
@@ -1191,6 +1366,89 @@ app.get('/api/period/reset', (_req, res) => {
 app.get('/api/reset', (_req, res) => {
   resetMatchState();
   res.json({ success: true });
+});
+
+// ── Sponsorer ────────────────────────────────────────────────────────────────
+// Lista, ersätt och radera sponsorlogotyper. Filerna lagras i public/sponsors/
+// och listan persisteras i data/sponsors.json så att de överlever serverstart.
+// Settings-sidan POST:ar HELA listan (upp till SPONSORS_MAX) som en blandning
+// av befintliga {id, url} och nya {dataUrl, name}-poster – servern diff:ar
+// och tar bort filer som inte längre refereras.
+app.get('/api/sponsors', (_req, res) => {
+  res.json({ success: true, sponsors: sponsorState.sponsors });
+});
+
+app.post('/api/sponsors', (req, res) => {
+  const incoming = Array.isArray(req.body?.sponsors) ? req.body.sponsors : null;
+  if (!incoming) {
+    return res.status(400).json({ success: false, error: 'Förväntade { sponsors: [...] }.' });
+  }
+  if (incoming.length > SPONSORS_MAX) {
+    return res.status(400).json({
+      success: false,
+      error: `Max ${SPONSORS_MAX} sponsorer tillåts.`
+    });
+  }
+
+  // Snabb-uppslag av befintliga poster (för att behålla deras filer)
+  const existingById = new Map(sponsorState.sponsors.map(s => [s.id, s]));
+  const keepIds      = new Set();
+  const nextList     = [];
+
+  try {
+    for (const item of incoming) {
+      if (item && item.id && existingById.has(item.id)) {
+        // Befintlig sponsor – behåll filen, ev. uppdatera namn
+        const existing = existingById.get(item.id);
+        const name = typeof item.name === 'string' ? item.name.trim().slice(0, 80) : existing.name;
+        nextList.push({ ...existing, name });
+        keepIds.add(item.id);
+      } else if (item && typeof item.dataUrl === 'string') {
+        // Ny sponsor – validera + skriv fil
+        const parsed = parseDataUrl(item.dataUrl);
+        if (!parsed) {
+          return res.status(400).json({
+            success: false,
+            error: 'Ogiltig bildtyp. Stödda format: PNG, JPG, GIF, WEBP, SVG.'
+          });
+        }
+        const entry = writeSponsorFile(parsed, item.name);
+        nextList.push(entry);
+        keepIds.add(entry.id);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Varje sponsor måste innehålla antingen id (befintlig) eller dataUrl (ny).'
+        });
+      }
+    }
+
+    // Ta bort filer för borttagna sponsorer
+    for (const existing of sponsorState.sponsors) {
+      if (!keepIds.has(existing.id)) deleteSponsorFile(existing.url);
+    }
+
+    sponsorState.sponsors = nextList;
+    saveSponsorManifest();
+    broadcastSponsors();
+    res.json({ success: true, sponsors: sponsorState.sponsors });
+  } catch (err) {
+    console.error('[sponsors] POST misslyckades:', err);
+    res.status(500).json({ success: false, error: err.message || 'Internt fel.' });
+  }
+});
+
+app.delete('/api/sponsors/:id', (req, res) => {
+  const id = req.params.id;
+  const idx = sponsorState.sponsors.findIndex(s => s.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Sponsorn hittades inte.' });
+  }
+  const [removed] = sponsorState.sponsors.splice(idx, 1);
+  deleteSponsorFile(removed.url);
+  saveSponsorManifest();
+  broadcastSponsors();
+  res.json({ success: true, sponsors: sponsorState.sponsors });
 });
 
 // ── Statusfråga (för Stream Deck-feedback) ───────────────────────────────────

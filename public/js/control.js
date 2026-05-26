@@ -5,7 +5,6 @@ const socket = io();
 // ════════════════════════════════════════════════════════════════════════════
 
 const statusEl   = document.getElementById('connection-status');
-const activeInd  = document.getElementById('activeGraphicIndicator');
 
 // Bildmixer (sticky header)
 const mixerBtns  = document.querySelectorAll('.mixer-btn');
@@ -104,21 +103,6 @@ let pendingPreGameStats   = null;
 // Senast valda spelar-/ledar-skylt – för visuell highlight + toggle
 let activeLowerThirdKey = '';
 
-// Läsbar etikett för varje grafik-nyckel
-const GRAPHIC_LABELS = {
-  scoreboard:   'Scoreboard',
-  lineupHome:   'Hemmalaguppställning',
-  lineupAway:   'Bortalagsuppställning',
-  table:        'Ligatabell',
-  fixtures:     'Omgångens matcher',
-  commentators: 'Kommentatorer (lower-third)',
-  matchup:      'Inför/Paus (Matchup)',
-  intermission: 'Pausvila',
-  playerLowerThird: 'Spelar-/Ledar-skylt',
-  preGameStats: 'Statistik inför match',
-  none:         'Ingen grafik visas'
-};
-
 // ════════════════════════════════════════════════════════════════════════════
 // BILDMIXER – direktväxling till valfri grafik
 // ════════════════════════════════════════════════════════════════════════════
@@ -185,8 +169,12 @@ function renderPenaltyList(listEl, penalties) {
         <button class="btn-penalty-remove" title="Ta bort utvisning" aria-label="Ta bort utvisning">×</button>`;
       listEl.appendChild(li);
     }
+    const isQueued = p.status === 'queued';
+    li.classList.toggle('is-queued', isQueued);
     li.querySelector('.penalty-row-jersey').textContent = p.jersey ? `#${p.jersey}` : '';
-    li.querySelector('.penalty-row-time').textContent   = formatPenaltyTime(p.remaining);
+    li.querySelector('.penalty-row-time').textContent   = isQueued
+      ? `VÄNTAR · ${formatPenaltyTime(p.duration)}`
+      : formatPenaltyTime(p.remaining);
   });
 
   // Steg 3: rendera/städa tom-läge som en riktig <li> så skärmläsare hör
@@ -204,9 +192,16 @@ function renderPenaltyList(listEl, penalties) {
 }
 
 function updatePenaltyCounts(home, away) {
-  const fmt = (n) => `${n} aktiv${n === 1 ? '' : 'a'}`;
-  penaltyHomeCount.textContent = fmt(home.length);
-  penaltyAwayCount.textContent = fmt(away.length);
+  // Visar antal AKTIVA + antal köade (om några), så operatören vet
+  // direkt om en utvisning ligger och väntar bakom kulisserna.
+  const fmt = (arr) => {
+    const active = arr.filter(p => p.status !== 'queued').length;
+    const queued = arr.filter(p => p.status === 'queued').length;
+    const base   = `${active} aktiv${active === 1 ? '' : 'a'}`;
+    return queued > 0 ? `${base} · ${queued} i kö` : base;
+  };
+  penaltyHomeCount.textContent = fmt(home);
+  penaltyAwayCount.textContent = fmt(away);
 }
 
 function applyPenalties(home, away) {
@@ -215,14 +210,20 @@ function applyPenalties(home, away) {
   updatePenaltyCounts(home || [], away || []);
 }
 
-// Klick-delegering för +2/+5-knappar (oavsett vilket lag)
+// Klick-delegering för +2/+2+2/+5-knappar (oavsett vilket lag).
+// data-kind="double" → 2+2 (servern lägger till två 2-min, andra queued).
 document.querySelectorAll('.btn-penalty').forEach(btn => {
   btn.addEventListener('click', () => {
     const team    = btn.dataset.team;
+    const kind    = btn.dataset.kind || 'single';
     const minutes = parseInt(btn.dataset.minutes, 10);
     const jerseyInput = team === 'home' ? inputPenaltyHomeJersey : inputPenaltyAwayJersey;
     const jersey = jerseyInput.value.trim();
-    socket.emit('penaltyAdd', { team, minutes, jersey });
+    if (kind === 'double') {
+      socket.emit('penaltyAdd', { team, kind: 'double', jersey });
+    } else {
+      socket.emit('penaltyAdd', { team, minutes, jersey });
+    }
     // Töm tröjnummer-fältet så nästa utvisning börjar tomt
     jerseyInput.value = '';
   });
@@ -253,11 +254,9 @@ socket.on('penaltiesUpdate', ({ penaltiesHome, penaltiesAway }) => {
 // AKTIV GRAFIK-INDIKATOR
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Uppdaterar ON AIR-pillen + sätter .on-air på rätt mixer-knapp.
-   Speglar live-statusen till aria-pressed så skärmläsare kan höra
-   vilken grafik som är aktiv (R3). */
+/** Speglar live-statusen till .on-air + aria-pressed på rätt mixer-knapp så
+ *  skärmläsare kan höra vilken grafik som är aktiv (R3). */
 function updateActiveIndicator(key) {
-  activeInd.textContent = GRAPHIC_LABELS[key] || key;
   // Mappa 'none' (= göm allt) till mixerns 'clear'-knapp för visuell ON AIR
   const mixerKey = key === 'none' ? 'clear' : key;
   mixerBtns.forEach(btn => {
@@ -271,12 +270,12 @@ function updateActiveIndicator(key) {
 // SOCKET – ANSLUTNING
 // ════════════════════════════════════════════════════════════════════════════
 socket.on('connect', () => {
-  statusEl.textContent = 'Ansluten';
+  statusEl.textContent = 'Server ansluten';
   statusEl.className   = 'status connected';
 });
 
 socket.on('disconnect', () => {
-  statusEl.textContent = 'Frånkopplad';
+  statusEl.textContent = 'Servern frånkopplad';
   statusEl.className   = 'status disconnected';
 });
 

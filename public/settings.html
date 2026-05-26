@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inställningar – Scoreboard</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/control.css">
+  <link rel="stylesheet" href="css/settings.css">
+</head>
+<body class="docs-body">
+
+  <header class="docs-header-bar">
+    <div class="docs-header-inner">
+      <a href="control.html" class="header-btn">← Tillbaka</a>
+      <h1>Inställningar</h1>
+      <span id="connection-status" class="status disconnected" role="status" aria-live="polite">Ansluter…</span>
+      <a href="api-docs.html" target="_blank" rel="noopener" class="header-btn header-btn-stacked-right"
+         title="Visa alla Stream Deck-genvägar">
+        Stream Deck shortcuts<span class="visually-hidden"> (öppnas i ny flik)</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="docs-main">
+
+    <article class="dash-card">
+      <h2>Sponsorlogotyper</h2>
+      <p class="card-hint">
+        Ladda upp <strong>upp till 15 sponsorlogotyper</strong>. De visas i en
+        rullande remsa längst ner på skärmen när grafikerna
+        <strong>Inför match</strong> och <strong>Pausvila</strong> är aktiva.
+        Stödda format: PNG, JPG, GIF, WEBP, SVG. Transparent PNG rekommenderas.
+      </p>
+
+      <div class="sponsor-toolbar">
+        <label for="sponsorFiles" class="btn btn-primary sponsor-add-btn">
+          + Lägg till logotyper
+        </label>
+        <input type="file" id="sponsorFiles" class="sponsor-file-input"
+               accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+               multiple>
+        <span class="sponsor-count" id="sponsorCount">0 / 10</span>
+      </div>
+
+      <div id="sponsorList" class="sponsor-list" aria-live="polite"></div>
+
+      <p id="sponsorEmpty" class="scroll-empty">
+        Inga sponsorer uppladdade ännu. Klicka på <strong>Lägg till logotyper</strong> ovan.
+      </p>
+
+      <div class="sponsor-save-row">
+        <button id="btnSaveSponsors" class="btn btn-primary full-width" disabled>
+          Spara sponsorer
+        </button>
+        <div id="sponsorStatus" class="fetch-status" role="status" aria-live="polite"></div>
+      </div>
+    </article>
+
+    <article class="dash-card">
+      <h2>Förhandsgranskning</h2>
+      <p class="card-hint">
+        Så här ser den rullande remsan ut live. Uppdateras automatiskt när du
+        sparar nya sponsorer.
+      </p>
+      <div class="sponsor-preview-wrap">
+        <div class="sponsor-preview-strip" id="sponsorPreviewStrip">
+          <div class="sponsor-preview-track" id="sponsorPreviewTrack"></div>
+        </div>
+        <p id="sponsorPreviewEmpty" class="sponsor-preview-empty">
+          Lägg till och spara minst en logotyp för att se förhandsgranskningen.
+        </p>
+      </div>
+    </article>
+
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

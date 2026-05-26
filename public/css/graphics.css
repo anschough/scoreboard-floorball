@@ -317,6 +317,16 @@ html, body {
 .penalty-stack-home { align-items: flex-end;   justify-self: end;   }
 .penalty-stack-away { align-items: flex-start; justify-self: start; }
 
+/* 2+2-par: två boxar sida vid sida i en horisontell rad inom stacken.
+   Hemma-laget bygger åt vänster (aktiv längst inåt scoreboarden, köad
+   längst ut), borta-laget speglas. */
+.penalty-pair {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+.penalty-stack-home .penalty-pair { flex-direction: row-reverse; }
+
 /* Penalty-box – glasmorf-bas + röd accent
    Format: liten "UTVISNING"-etikett + tid. Tid är dominerande visuellt. */
 .penalty-box {
@@ -2087,3 +2097,113 @@ html, body {
 .intermission-panel.visible .intermission-team-away { transition-delay: 0.15s; }
 .intermission-panel.visible .intermission-vs        { transition-delay: 0.40s; }
 .intermission-panel.visible .intermission-meta      { transition-delay: 0.65s; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPONSOR-STRIP – Rullande logos längst ner
+   Visas under matchup- och intermission-grafiken (styrs via .visible-klassen
+   från graphics.js). Track:en innehåller sponsorerna duplicerade så att
+   translateX(-50%)-animationen kan loopa sömlöst – när första halvan har
+   åkt ut i vänsterkanten har andra halvan tagit dess plats och nästa
+   iteration ser identisk ut.
+═══ */
+.sponsor-strip {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 88px;
+  z-index: 9;        /* under matchup-panel (10), över bakgrund */
+  overflow: hidden;
+  pointer-events: none;
+
+  /* Helfärgad mörkblå (Sollentuna-palett) – ingen fade upptill. */
+  background: rgb(var(--dark-blue-rgb));
+  border-top: 1px solid rgba(var(--lb-500-rgb), 0.18);
+
+  display: flex;
+  align-items: center;
+
+  opacity: 0;
+  transform: translateY(100%);
+  transition: opacity 0.45s var(--ease-in),
+              transform 0.45s var(--ease-in);
+}
+.sponsor-strip.visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.6s var(--ease-out) 0.2s,
+              transform 0.6s var(--ease-out) 0.2s;
+}
+
+/* Tunna fade-kanter så logosrullen tonar in/ut i sidorna istället för
+   att klippas hårt vid kanten. */
+.sponsor-strip::before,
+.sponsor-strip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 2;
+  pointer-events: none;
+}
+.sponsor-strip::before {
+  left: 0;
+  background: linear-gradient(90deg,
+              rgba(var(--dark-blue-rgb), 1) 0%,
+              rgba(var(--dark-blue-rgb), 0) 100%);
+}
+.sponsor-strip::after {
+  right: 0;
+  background: linear-gradient(-90deg,
+              rgba(var(--dark-blue-rgb), 1) 0%,
+              rgba(var(--dark-blue-rgb), 0) 100%);
+}
+
+.sponsor-track {
+  display: flex;
+  align-items: center;
+  gap: 90px;
+  padding: 0 45px;
+  width: max-content;
+  animation: sponsorScroll 45s linear infinite;
+  will-change: transform;
+}
+/* Pausa animationen tills track:en har innehåll (annars rycker till när
+   listan fylls i mitten av en cykel) och när stripen inte är synlig
+   (sparar CPU för OBS-källan när inget visas). */
+.sponsor-track:empty { animation: none; }
+.sponsor-strip:not(.visible) .sponsor-track { animation-play-state: paused; }
+
+.sponsor-track img {
+  height: 58px;
+  width: auto;
+  max-width: 240px;
+  object-fit: contain;
+  /* Vit-tinta logos så de syns mot mörk bakgrund. Operatören förväntas
+     ladda upp ensfärgade/transparenta logos – färglogos blir vita. */
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+  flex-shrink: 0;
+}
+
+@keyframes sponsorScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* När sponsor-stripen är synlig: lyft matchup- och intermission-panelerna
+   så det blir en tydlig marginal (~32px) ovanför stripen. body-klassen
+   sätts av graphics.js synkat med .sponsor-strip.visible. */
+body.has-sponsor-strip .matchup-panel,
+body.has-sponsor-strip .intermission-panel {
+  bottom: calc(88px + 32px);
+  transition: opacity 0.35s var(--ease-in),
+              bottom 0.5s var(--ease-out);
+}
+body.has-sponsor-strip .matchup-panel.visible,
+body.has-sponsor-strip .intermission-panel.visible {
+  transition: opacity 0.55s var(--ease-out),
+              bottom 0.5s var(--ease-out);
+}

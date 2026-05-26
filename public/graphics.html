@@ -217,6 +217,16 @@
     </div>
   </div>
 
+  <!-- ── Sponsor-strip (rullande logos längst ner) ──────────────────────
+       Visas under matchup- och intermission-grafiken. Track:en innehåller
+       sponsorerna duplicerade så att translateX(-50%)-animationen loopar
+       sömlöst (andra halvan visuellt identisk med första). -->
+  <div id="sponsor-strip"
+       class="sponsor-strip"
+       aria-hidden="true">
+    <div class="sponsor-track" id="sponsorTrack"></div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/graphics.js"></script>
 </body>
