@@ -191,6 +191,9 @@ function renderPenaltyList(listEl, penalties) {
   }
 }
 
+// Måste matcha MAX_PENALTIES_PER_TEAM i server.js
+const MAX_PENALTIES_PER_TEAM = 2;
+
 function updatePenaltyCounts(home, away) {
   // Visar antal AKTIVA + antal köade (om några), så operatören vet
   // direkt om en utvisning ligger och väntar bakom kulisserna.
@@ -202,6 +205,23 @@ function updatePenaltyCounts(home, away) {
   };
   penaltyHomeCount.textContent = fmt(home);
   penaltyAwayCount.textContent = fmt(away);
+  // Disabla knappar när cap är nådd – 2+2 kräver dessutom 2 lediga platser.
+  updatePenaltyButtons('home', home);
+  updatePenaltyButtons('away', away);
+}
+
+function updatePenaltyButtons(team, arr) {
+  const slotsLeft = MAX_PENALTIES_PER_TEAM - arr.length;
+  document.querySelectorAll(`.btn-penalty[data-team="${team}"]`).forEach(btn => {
+    const needsTwo = btn.dataset.kind === 'double';
+    const required = needsTwo ? 2 : 1;
+    btn.disabled = slotsLeft < required;
+    btn.title = btn.disabled
+      ? `Lagets utvisningar fulla (${arr.length}/${MAX_PENALTIES_PER_TEAM})`
+      : (btn.dataset.kind === 'double'
+          ? '2+2: lägger två 2-min där andra startar när första går ut'
+          : '');
+  });
 }
 
 function applyPenalties(home, away) {

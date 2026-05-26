@@ -407,12 +407,12 @@ html, body {
   font-family: var(--font-display);
   font-size: 1.7rem;
   font-weight: 700;
-  color: var(--penalty-red-soft);
+  color: var(--sollentuna-white);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   line-height: 1;
-  text-shadow: 0 0 14px rgba(var(--penalty-red-rgb), 0.55),
-               0 2px 6px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 0 14px rgba(var(--penalty-red-rgb), 0.45),
+               0 2px 6px rgba(0, 0, 0, 0.55);
 }
 
 /* När scoreboarden är dold döljs även utvisningsrutorna (de hör ihop).

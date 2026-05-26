@@ -201,16 +201,18 @@ function startClock() {
 
 // ── Utvisningslogik ──────────────────────────────────────────────────────────
 // Modell: varje utvisning har status 'active' (tickar och syns i grafiken)
-// eller 'queued' (väntar tills en aktiv löper ut). Max MAX_ACTIVE_PENALTIES
-// aktiva per lag – kommer från regeln att man får spela max 3 mot 5 (alltså
-// 2 utvisningar samtidigt). 2+2-utvisning är två 2-min-poster där den andra
-// alltid läggs queued direkt, så grafiken bara visar EN box som räknar ner
-// 2:00 → byts mot en ny 2:00 när första går ut.
+// eller 'queued' (väntar tills en aktiv löper ut). Hård cap på totalen:
+// MAX_PENALTIES_PER_TEAM = 2 entries per lag (regeln 3-mot-5 som minst).
+// Det innebär t.ex. att 2+2 (som lägger 2 entries) bara går att lägga om
+// laget har 0 entries sedan tidigare. Försök därutöver avvisas.
+// MAX_ACTIVE_PENALTIES = 2 håller dessutom att max 2 tickar samtidigt –
+// relevant för 2+2 där andra halvan startar när första löper ut.
 //
 // Säker array-mutation: iterera BAKIFRÅN och splice. Då kan vi ta bort
 // element under iterationen utan att indexen skiftar – två utvisningar som
 // går ut på samma tick hanteras korrekt.
-const MAX_ACTIVE_PENALTIES = 2;
+const MAX_PENALTIES_PER_TEAM = 2;
+const MAX_ACTIVE_PENALTIES   = 2;
 
 function countActive(arr) {
   let n = 0;
@@ -1115,9 +1117,11 @@ function broadcastPenalties() {
 
 // addPenalty: forceQueued tvingar status='queued' oavsett aktivt-count
 // (används för andra halvan av 2+2 så den hamnar bakom första 2-min:en).
+// Returnerar null om laget redan har MAX_PENALTIES_PER_TEAM entries.
 function addPenalty(team, minutes, jersey, forceQueued = false) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
+  if (arr.length >= MAX_PENALTIES_PER_TEAM) return null;
   const m = parseInt(minutes, 10);
   if (!ALLOWED_PENALTY_MINUTES.has(m)) return null;
 
@@ -1138,11 +1142,13 @@ function addPenalty(team, minutes, jersey, forceQueued = false) {
 }
 
 // 2+2-utvisning: två 2-min-poster där den ANDRA alltid är queued direkt.
-// Första följer normala regler (active om det finns plats, annars queued).
 // Båda får samma pairId så grafiken kan rendera dem sida vid sida.
+// Kräver att laget har plats för BÅDA – avvisas annars (alternativet
+// vore att lägga bara första och tappa andra, vilket är förvirrande).
 function addDoubleMinor(team, jersey) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
+  if (arr.length + 2 > MAX_PENALTIES_PER_TEAM) return null;
   const first  = addPenalty(team, 2, jersey, false);
   if (!first) return null;
   const second = addPenalty(team, 2, jersey, true);
@@ -1192,21 +1198,31 @@ function clearPenalties(team) {
 app.get('/api/penalty/:team/add', (req, res) => {
   const team   = req.params.team;
   const jersey = req.query.jersey;
+  const arr    = penaltyArrayFor(team);
+  if (!arr) {
+    return res.status(400).json({ success: false, error: 'Ogiltigt lag. Använd team=home eller team=away.' });
+  }
   if (req.query.kind === 'double') {
-    const pair = addDoubleMinor(team, jersey);
-    if (!pair) {
-      return res.status(400).json({
+    if (arr.length + 2 > MAX_PENALTIES_PER_TEAM) {
+      return res.status(409).json({
         success: false,
-        error: 'Ogiltigt lag. Använd team=home eller team=away.'
+        error: `2+2 kräver två lediga platser – laget har redan ${arr.length}/${MAX_PENALTIES_PER_TEAM} utvisningar.`
       });
     }
+    const pair = addDoubleMinor(team, jersey);
     return res.json({ success: true, penalties: [pair.first, pair.second] });
+  }
+  if (arr.length >= MAX_PENALTIES_PER_TEAM) {
+    return res.status(409).json({
+      success: false,
+      error: `Max ${MAX_PENALTIES_PER_TEAM} utvisningar per lag. Vänta tills en löper ut.`
+    });
   }
   const entry = addPenalty(team, req.query.minutes, jersey);
   if (!entry) {
     return res.status(400).json({
       success: false,
-      error: 'Ogiltigt lag eller minuter. Använd minutes=2/5 (+ ev. kind=double) och team=home/away.'
+      error: 'Ogiltiga minuter. Använd minutes=2/5 (+ ev. kind=double).'
     });
   }
   res.json({ success: true, penalty: entry });
