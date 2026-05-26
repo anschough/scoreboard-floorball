@@ -85,6 +85,14 @@ const previewFixturesList  = document.getElementById('previewFixturesList');
 const btnClearFixtures     = document.getElementById('btnClearFixtures');
 const btnSendFixtures      = document.getElementById('btnSendFixtures');
 
+// Flik 3 – Statistik inför match-förhandsvisning (read-only)
+const previewPreGame      = document.getElementById('previewPreGame');
+const pgPreviewHomeName   = document.getElementById('pgPreviewHomeName');
+const pgPreviewAwayName   = document.getElementById('pgPreviewAwayName');
+const pgPreviewBody       = document.getElementById('pgPreviewBody');
+const btnClearPreGame     = document.getElementById('btnClearPreGame');
+const btnSendPreGame      = document.getElementById('btnSendPreGame');
+
 // ════════════════════════════════════════════════════════════════════════════
 // LOKAL STATE – skrapad data som väntar på att skickas live
 // ════════════════════════════════════════════════════════════════════════════
@@ -92,6 +100,7 @@ let pendingInnebandyTable = { name: '', rows: [] };
 let pendingIbHome         = { name: '', players: [], leaders: [] };
 let pendingIbAway         = { name: '', players: [], leaders: [] };
 let pendingFixtures       = { title: '', fixtures: [] };
+let pendingPreGameStats   = null;
 // Senast valda spelar-/ledar-skylt – för visuell highlight + toggle
 let activeLowerThirdKey = '';
 
@@ -106,6 +115,7 @@ const GRAPHIC_LABELS = {
   matchup:      'Inför/Paus (Matchup)',
   intermission: 'Pausvila',
   playerLowerThird: 'Spelar-/Ledar-skylt',
+  preGameStats: 'Statistik inför match',
   none:         'Ingen grafik visas'
 };
 
@@ -427,6 +437,8 @@ socket.on('matchStateReset', () => {
   previewInnebandyLineup.hidden = true;
   previewInnebandyTable.hidden  = true;
   previewFixtures.hidden        = true;
+  previewPreGame.hidden         = true;
+  pendingPreGameStats           = null;
   previewIbHomeLeadersWrap.hidden = true;
   previewIbAwayLeadersWrap.hidden = true;
   if (fetchStatusAll) setStatus(fetchStatusAll, '');
@@ -547,6 +559,70 @@ function renderPreviewFixtures(containerEl, fixtures) {
   });
 }
 
+/**
+ * Renderar Statistik-inför-match-previewen som en 3-kolumns tabell
+ * [hemma-värde · etikett · borta-värde]. Section-rader (Powerplay/Boxplay)
+ * spänner över alla 3 kolumner. Senaste 5-prickarna renderas inline
+ * med samma färger som grafiken kommer att visa live.
+ */
+function renderPreGamePreview(data) {
+  if (!data) {
+    pendingPreGameStats     = null;
+    previewPreGame.hidden   = true;
+    pgPreviewBody.innerHTML = '';
+    return;
+  }
+  pendingPreGameStats = data;
+  pgPreviewHomeName.textContent = data.home.teamName || 'Hemma';
+  pgPreviewAwayName.textContent = data.away.teamName || 'Borta';
+  // Bygg raderna deklarativt så det är lätt att lägga till/ändra fält senare.
+  const rows = [
+    { label: 'Tabellplacering',  h: data.home.ranking,          a: data.away.ranking },
+    { label: 'Inbördes möten',   h: data.home.meetingWins,      a: data.away.meetingWins },
+    { label: 'Senaste mötet',    h: data.home.goalsLastMeeting, a: data.away.goalsLastMeeting },
+    { label: 'Senaste 5 matcherna', h: renderLastDotsHtml(data.home.lastGames),
+                                    a: renderLastDotsHtml(data.away.lastGames), html: true },
+    { section: 'Powerplay' },
+    { label: 'Antal PP',              h: data.home.numberOfPPs,    a: data.away.numberOfPPs },
+    { label: 'Effektivitet i PP',     h: data.home.ppEffectivity,  a: data.away.ppEffectivity },
+    { label: 'Gjorda mål i PP',       h: data.home.ppGoalsScored,  a: data.away.ppGoalsScored },
+    { label: 'Snittid gjorda mål i PP', h: data.home.ppAvgGoalTime, a: data.away.ppAvgGoalTime },
+    { label: 'Insläppta mål i PP',    h: data.home.ppGoalsAgainst, a: data.away.ppGoalsAgainst },
+    { section: 'Boxplay' },
+    { label: 'Antal BP',              h: data.home.numberOfBPs,    a: data.away.numberOfBPs },
+    { label: 'Effektivitet i BP',     h: data.home.bpEffectivity,  a: data.away.bpEffectivity },
+    { label: 'Insläppta mål i BP',    h: data.home.bpGoalsAgainst, a: data.away.bpGoalsAgainst },
+    { label: 'Snittid insläppta mål i BP', h: data.home.bpAvgGoalAgainstTime,
+                                          a: data.away.bpAvgGoalAgainstTime },
+    { label: 'Gjorda mål i BP',       h: data.home.bpGoalsScored,  a: data.away.bpGoalsScored }
+  ];
+  pgPreviewBody.innerHTML = rows.map(r => {
+    if (r.section) {
+      return `<tr class="pg-section"><td colspan="3">${r.section}</td></tr>`;
+    }
+    const hCell = r.html ? r.h : escapeHtml(r.h);
+    const aCell = r.html ? r.a : escapeHtml(r.a);
+    return `<tr><td class="pg-val">${hCell}</td><td class="pg-label">${escapeHtml(r.label)}</td><td class="pg-val">${aCell}</td></tr>`;
+  }).join('');
+  previewPreGame.hidden = false;
+}
+
+/** Renderar små färgade prickar för senaste 5-listan – matchar grafiken. */
+function renderLastDotsHtml(lastGames) {
+  if (!Array.isArray(lastGames) || !lastGames.length) return '<span class="pg-muted">saknas</span>';
+  return `<span class="pg-dots">` + lastGames.map(g =>
+    `<span class="pg-dot" style="background:${g.color}" title="${escapeHtml(g.name)}"></span>`
+  ).join('') + `</span>`;
+}
+
+/** Minimal HTML-escaper för säker render av textfält från IBIS. */
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 /** Renderar tabellrader i preview-tabellen (logo + 9 kolumner). */
 function renderPreviewTable(tbodyEl, rows) {
   tbodyEl.innerHTML = '';
@@ -642,6 +718,9 @@ function hydratePreviewsFromState(state) {
       : `${state.fixtures.length} matcher`;
     previewFixtures.hidden = false;
   }
+  if (state.preGameStats) {
+    renderPreGamePreview(state.preGameStats);
+  }
   applyActiveLowerThirdHighlight();
 }
 
@@ -669,7 +748,8 @@ socket.on('fetch_result_innebandy_all_data', (data) => {
   btnFetchAll.disabled = false;
 
   const { match, standings, standingsName, standingsError,
-          fixtures, fixturesTitle, fixturesError } = data || {};
+          fixtures, fixturesTitle, fixturesError,
+          preGameStats, preGameStatsError } = data || {};
   if (!match || (!match.homeRoster?.length && !match.awayRoster?.length)) {
     setStatus(fetchStatusAll, '⚠ Inga spelare hittades i matchen', 'error');
     return;
@@ -769,6 +849,13 @@ socket.on('fetch_result_innebandy_all_data', (data) => {
     previewFixtures.hidden = true;
   }
 
+  // ── 3c. Statistik inför match → preview ────────────────────────────────
+  if (preGameStats) {
+    renderPreGamePreview(preGameStats);
+  } else {
+    renderPreGamePreview(null);
+  }
+
   // ── 4. Sammanfattning som status-meddelande ────────────────────────────
   const matchInfo = `✓ ${match.homeTeam} (${match.homeRoster.length}) vs ${match.awayTeam} (${match.awayRoster.length})`;
   if (standings && standings.length) {
@@ -849,6 +936,16 @@ btnSendFixtures.addEventListener('click', () => {
 btnClearFixtures.addEventListener('click', () => {
   pendingFixtures = { title: '', fixtures: [] };
   previewFixtures.hidden = true;
+});
+
+// ── Statistik inför match ────────────────────────────────────────────────
+btnSendPreGame.addEventListener('click', () => {
+  if (!pendingPreGameStats) return;
+  socket.emit('switchGraphic', { to: 'preGameStats' });
+});
+btnClearPreGame.addEventListener('click', () => {
+  pendingPreGameStats = null;
+  previewPreGame.hidden = true;
 });
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -26,6 +26,10 @@
             <span id="activeGraphicIndicator" class="on-air-value">Scoreboard</span>
           </span>
           <span id="connection-status" class="status disconnected">Ansluter…</span>
+          <a href="graphics.html" target="_blank" rel="noopener" class="header-btn header-btn-graphics"
+             title="Öppna grafik-lagret i en ny flik (för förhandsvisning eller OBS Browser Source-test)">
+            Öppna grafik
+          </a>
           <a href="api-docs.html" target="_blank" rel="noopener" class="header-btn">
             Stream Deck shortcuts
           </a>
@@ -44,6 +48,7 @@
           <button class="mixer-btn" data-graphic="lineupAway"   title="Visa bortalagets uppställning live">Borta Lineup</button>
           <button class="mixer-btn" data-graphic="table"        title="Visa serietabellen live">Tabell</button>
           <button class="mixer-btn" data-graphic="fixtures"     title="Visa omgångens matcher live">Omgång</button>
+          <button class="mixer-btn" data-graphic="preGameStats" title="Visa statistik inför match live">Stats inför match</button>
           <button class="mixer-btn" data-graphic="intermission" title="Visa pausvila-skylten live (räknar ut nästa period)">Pausvila</button>
         </nav>
       </div>
@@ -298,6 +303,32 @@
               </div>
               <button id="btnSendInnebandyTable" class="btn btn-send full-width">
                 Visa Tabell live
+              </button>
+            </div>
+            <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
+          </div>
+        </article>
+
+        <article class="dash-card scroll-card">
+          <h2>Statistik inför match</h2>
+          <div class="scroll-body">
+            <div id="previewPreGame" class="preview-box" hidden>
+              <div class="preview-header">
+                <span class="ib-lineup-side">Skrapat från IBIS</span>
+                <button id="btnClearPreGame" class="btn-clear" title="Rensa">✕</button>
+              </div>
+              <table class="pregame-preview-table">
+                <thead>
+                  <tr>
+                    <th class="pg-col-home"  id="pgPreviewHomeName"></th>
+                    <th class="pg-col-label"></th>
+                    <th class="pg-col-away"  id="pgPreviewAwayName"></th>
+                  </tr>
+                </thead>
+                <tbody id="pgPreviewBody"></tbody>
+              </table>
+              <button id="btnSendPreGame" class="btn btn-send full-width">
+                Visa Statistik inför match live
               </button>
             </div>
             <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>

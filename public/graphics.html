@@ -163,6 +163,32 @@
     </div>
   </div>
 
+  <!-- ── Statistik inför match (centrerad fullskärms-grafik) ────────────── -->
+  <!-- Bredd matchar table-graphic så vi får samma "broadcast-känsla". Tre
+       kolumner: hemma-värde · etikett · borta-värde. Section-rader spänner
+       över hela bredden. Rader animeras in i kaskad. -->
+  <div id="pregame-stats-graphic"
+       class="center-graphic pregame-stats-panel"
+       aria-hidden="true">
+    <div class="pg-header">
+      <span class="pg-eyebrow">STATISTIK INFÖR MATCH</span>
+      <div class="pg-teams">
+        <div class="pg-team pg-team-home">
+          <div class="pg-team-logo" id="pgHomeLogo"></div>
+          <span class="pg-team-name" id="pgHomeName">Hemma</span>
+        </div>
+        <div class="pg-team pg-team-away">
+          <span class="pg-team-name" id="pgAwayName">Borta</span>
+          <div class="pg-team-logo" id="pgAwayLogo"></div>
+        </div>
+      </div>
+    </div>
+
+    <table class="pg-table">
+      <tbody id="pgTableBody"></tbody>
+    </table>
+  </div>
+
   <!-- ── Pausvila-skylt (Intermission) ──────────────────────────────────── -->
   <!-- Använder samma box som Matchup (mörk platta + animerad ljuslinje).
        Struktur: PAUSVILA överst som eyebrow, lag+VS i mitten,

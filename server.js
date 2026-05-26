@@ -52,7 +52,11 @@ let matchState = {
   // duration + remaining anges i sekunder. När remaining når 0 tas
   // utvisningen automatiskt bort av klock-loopen.
   penaltiesHome: [],
-  penaltiesAway: []
+  penaltiesAway: [],
+  // Statistik inför match (pregamestats + ppstatistics aggregerat).
+  // null = ingen data hämtad än. När data finns: { home: {...}, away: {...} }
+  // Se buildPreGameStats() för fältlistan.
+  preGameStats: null
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -178,7 +182,8 @@ function resetMatchState() {
     matchStart: '',
     playerLowerThird: null,
     penaltiesHome: [],
-    penaltiesAway: []
+    penaltiesAway: [],
+    preGameStats: null
   };
   penaltySeq = 0;
   graphicState.activeGraphic = 'none';
@@ -246,6 +251,57 @@ async function getInnebandyAuth() {
   };
 }
 
+// ── Scoreboard-kortnamn (akronymer) ───────────────────────────────────────
+// IBIS' TeamShortName är 6 tecken ("Sollen", "Rosers") – för långt för en
+// snygg scoreboard. Vi bygger istället en 2–5-bokstavs akronym genom att:
+//   1. Behålla redan akronym-iga ord (ALL-CAPS ≤4 tecken: FBC, IFK, IBK)
+//   2. Ta första bokstaven från övriga "riktiga" ord
+//   3. Filtrera bort generiska klubbsuffix (IBK, IF, BK, SK, IBF, IBS, FC)
+//   4. Om koden blir <3 tecken: fallback till första 4 tecken av huvudordet
+// Resultatet är default – producenten kan fortfarande editera fritt i
+// kontrollpanelen (för t.ex. "RA19" där 19 är lagets nummer).
+// Generiska klubbtyp-suffix + sport-ord som inte tillför akronym-värde
+// ("Linköping Innebandy" ska bli "LINK", inte "LI"; "AIK" är förenings-
+// identitet och hör hemma här — men för "Mullsjö AIS IF" råkar AIS hamna
+// i akronym-pathen via ALL-CAPS-regeln så det är OK).
+const GENERIC_SUFFIXES = new Set([
+  'IBK', 'IF', 'BK', 'SK', 'IBF', 'IBS', 'FC', 'AIK', 'INNEBANDY'
+]);
+
+function buildScoreboardCode(fullName) {
+  if (!fullName || typeof fullName !== 'string') return '';
+  const clean = fullName.trim().replace(/\s+/g, ' ');
+  if (!clean) return '';
+
+  // Behåll bara ord som inte är generiska suffix
+  const words = clean.split(' ')
+    .map(w => w.replace(/[^\p{L}0-9]/gu, ''))
+    .filter(w => w && !GENERIC_SUFFIXES.has(w.toUpperCase()));
+  if (!words.length) {
+    // Allt var generic-suffix – fallback till första 4 av originalet
+    return clean.replace(/[^\p{L}0-9]/gu, '').slice(0, 4).toUpperCase();
+  }
+
+  // Bygg akronym: behåll all-caps-ord, annars första bokstaven
+  const parts = words.map(w => {
+    // Redan all-caps + max 4 tecken = redan en akronym → behåll
+    if (/^[A-ZÅÄÖ]{2,4}$/.test(w)) return w;
+    return w.charAt(0);
+  });
+  let code = parts.join('').toUpperCase();
+
+  // För kort? Fallback till första 4 tecken av huvudordet. Tröskeln är
+  // < 2 så att 2-bokstavskoder från ≥2 ord (t.ex. "Rosersberg Arlanda" →
+  // "RA") behålls – de är ofta hur klubbar marknadsför sig själva.
+  if (code.length < 2) {
+    const mainWord = words.find(w => !/^[A-ZÅÄÖ]{2,4}$/.test(w)) || words[0];
+    code = mainWord.slice(0, 4).toUpperCase();
+  }
+
+  // Cap till 5 tecken (scoreboarden har begränsat utrymme)
+  return code.slice(0, 5);
+}
+
 // Formaterar en spelare till strängen "{nummer} {namn}".
 // Sorterar samtliga spelare numeriskt på tröjnummer (1 → 99).
 function formatPlayers(apiPlayers) {
@@ -290,8 +346,11 @@ async function fetchInnebandyLineup(url) {
   return {
     homeName:      data.HomeTeam || '',
     awayName:      data.AwayTeam || '',
-    homeShortName: data.HomeTeamShortName || '',
-    awayShortName: data.AwayTeamShortName || '',
+    // Auto-genererad akronym från fullnamnet (FBCS, RA, IFKL …). IBIS'
+    // egen TeamShortName är 6 tecken vilket är för långt för scoreboarden;
+    // producenten kan fortfarande editera fältet manuellt efter hämtningen.
+    homeShortName: buildScoreboardCode(data.HomeTeam) || data.HomeTeamShortName || '',
+    awayShortName: buildScoreboardCode(data.AwayTeam) || data.AwayTeamShortName || '',
     homeLogo:      data.HomeTeamLogotypeUrl || '',
     awayLogo:      data.AwayTeamLogotypeUrl || '',
     venue:         detail.Venue || '',
@@ -300,6 +359,145 @@ async function fetchInnebandyLineup(url) {
     away:          formatPlayers(data.AwayTeamPlayers || []),
     homeLeaders:   formatPersons(data.HomeTeamTeamPersons || []),
     awayLeaders:   formatPersons(data.AwayTeamTeamPersons || [])
+  };
+}
+
+// ── Innebandy Stats API – Statistik inför match ──────────────────────────────
+// Två separata IBIS-endpoints kombineras:
+//   1. matches/{matchId}/pregamestats  →  rankning, head-to-head, senaste 5
+//   2. competitions/{compId}/ppstatistics  →  powerplay/boxplay per lag
+// Aggregeras till ett "preGameStats"-objekt som matchar UI-radernas
+// fältnamn. Resultatkoder för Senaste-5-prickarna är 1-8 (definierade av
+// IBIS-frontend); färgerna nedan är direktkopierade så grafiken ser ut
+// som stats.innebandy.se.
+const LAST_GAME_RESULT_LEGEND = {
+  1: { name: 'Förlust efter ordinarie tid', color: '#ff0000' },
+  2: { name: 'Förlust efter övertid',       color: '#cb1010' },
+  3: { name: 'Förlust efter straffar',      color: '#850e0e' },
+  4: { name: 'Oavgjort',                    color: '#ebebeb' },
+  5: { name: 'Oavgjort efter förlängning',  color: '#333333' },
+  6: { name: 'Vinst efter full tid',        color: '#46b240' },
+  7: { name: 'Vinst efter övertid',         color: '#358931' },
+  8: { name: 'Vinst efter straffar',        color: '#245e21' }
+};
+
+/**
+ * Medelvärde av två sekund-värden, formaterat som "MM:SS". Värden = 0
+ * räknas som "ej tillgängliga" och hoppas över i snittet. Returnerar
+ * "Saknas" om båda är 0. Speglar IBIS' egen 'ih'-hjälpare exakt så vår
+ * grafik visar samma siffror som stats.innebandy.se.
+ */
+function formatAvgSeconds(s1, s2) {
+  let sum = 0, count = 0;
+  if (s1 > 0) { sum += s1; count++; }
+  if (s2 > 0) { sum += s2; count++; }
+  if (sum <= 0 || count <= 0) return 'Saknas';
+  const avg = sum / count;
+  const m = Math.floor(avg / 60);
+  const s = Math.floor(avg) % 60;
+  if (m === 0 && s === 0) return 'Saknas';
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Procent eller "-" om nämnaren är 0. (1 - x) för boxplay-effektivitet. */
+function pct(num, den, invert = false) {
+  if (!den || den <= 0) return '-';
+  const ratio = invert ? (1 - num / den) : (num / den);
+  return `${Math.round(ratio * 100)}%`;
+}
+
+/**
+ * Slår ihop pregamestats + ppstatistics till en kompakt struktur som
+ * grafiken renderar 1:1. Tolererar att ppRow saknas (t.ex. ny serie
+ * där statistik ännu inte är inrapporterad) – då blir PP/BP-fälten "-".
+ */
+function buildPreGameStatsSide(pre, side, ppRow) {
+  const isHome = side === 'home';
+  const lastGamesRaw = (isHome ? pre.HomeTeamLastGames : pre.AwayTeamLastGames) || [];
+  const lastGames = lastGamesRaw
+    .filter(v => v != null)
+    .map(code => ({
+      code,
+      name:  (LAST_GAME_RESULT_LEGEND[code] || {}).name  || 'Okänt',
+      color: (LAST_GAME_RESULT_LEGEND[code] || {}).color || '#888'
+    }));
+
+  const ranking          = isHome ? pre.HomeTeamRanking          : pre.AwayTeamRanking;
+  const meetingWins      = isHome ? pre.HomeTeamMeetingWins      : pre.AwayTeamMeetingWins;
+  const goalsLastMeeting = isHome ? pre.HomeTeamGoalsLastMeeting : pre.AwayTeamGoalsLastMeeting;
+
+  // PP/BP-block – tomt om ppRow saknas. Vi returnerar "-" så att grafiken
+  // kan rendera samma cell-struktur oavsett.
+  const pp = ppRow || {};
+  const ppGoalsScored   = (pp.GoalsScoredPP1  || 0) + (pp.GoalsScoredPP2  || 0);
+  const ppGoalsAgainst  = (pp.GoalsAgainstPP1 || 0) + (pp.GoalsAgainstPP2 || 0);
+  const bpGoalsAgainst  = (pp.GoalsAgainstBP1 || 0) + (pp.GoalsAgainstBP2 || 0);
+  const bpGoalsScored   = (pp.GoalsScoredBP1  || 0) + (pp.GoalsScoredBP2  || 0);
+
+  return {
+    teamName:        (isHome ? pre.HomeTeam        : pre.AwayTeam)        || '',
+    teamShortName:   (isHome ? pre.HomeTeamShortName : pre.AwayTeamShortName) || '',
+    logo:            (isHome ? pre.HomeTeamLogotypeUrl : pre.AwayTeamLogotypeUrl) || '',
+    ranking:          ranking != null ? String(ranking) : '-',
+    meetingWins:      meetingWins != null ? String(meetingWins) : '0',
+    goalsLastMeeting: goalsLastMeeting != null ? String(goalsLastMeeting) : '0',
+    lastGames,
+    // Powerplay
+    numberOfPPs:      ppRow ? String(pp.NumberOfPPs || 0) : '-',
+    ppEffectivity:    ppRow ? pct(ppGoalsScored, pp.NumberOfPPs) : '-',
+    ppGoalsScored:    ppRow ? String(ppGoalsScored) : '-',
+    ppAvgGoalTime:    ppRow ? formatAvgSeconds(pp.SecondsToGoalScoredPP1, pp.SecondsToGoalScoredPP2) : '-',
+    ppGoalsAgainst:   ppRow ? String(ppGoalsAgainst) : '-',
+    // Boxplay
+    numberOfBPs:      ppRow ? String(pp.NumberOfBPs || 0) : '-',
+    bpEffectivity:    ppRow ? pct(bpGoalsAgainst, pp.NumberOfBPs, true) : '-',
+    bpGoalsAgainst:   ppRow ? String(bpGoalsAgainst) : '-',
+    bpAvgGoalAgainstTime: ppRow ? formatAvgSeconds(pp.SecondsToGoalAgainstBP1, pp.SecondsToGoalAgainstBP2) : '-',
+    bpGoalsScored:    ppRow ? String(bpGoalsScored) : '-'
+  };
+}
+
+/**
+ * Hämtar och bygger statistik inför match.
+ * URL-format: ...sasong/X/serie/Y/match/Z/(statistik|laguppstallning|...)
+ */
+async function fetchInnebandyPreGameStats(matchUrl) {
+  const m = matchUrl.match(/\/sasong\/(\d+)\/serie\/(\d+)\/match\/(\d+)/);
+  if (!m) throw new Error('Kunde inte hitta säsong/serie/match-ID i URL:en');
+  const [, , competitionId, matchId] = m;
+
+  const { apiRoot, headers } = await getInnebandyAuth();
+
+  // Parallell hämtning. ppstatistics är "nice to have" – pregamestats är
+  // obligatoriskt (utan det får vi ingen meningsfull skylt).
+  const [preRes, ppRes] = await Promise.allSettled([
+    axios.get(`${apiRoot}matches/${matchId}/pregamestats`,        { timeout: 10000, headers }),
+    axios.get(`${apiRoot}competitions/${competitionId}/ppstatistics`, { timeout: 10000, headers })
+  ]);
+
+  if (preRes.status === 'rejected') {
+    throw new Error(`pregamestats svarade inte: ${preRes.reason.message}`);
+  }
+  const pre = preRes.value.data;
+  if (!pre || !pre.HomeTeamID || !pre.AwayTeamID) {
+    throw new Error('Oväntat svar från pregamestats – saknar lag-ID:n');
+  }
+
+  // Slå upp PP/BP-raderna per lag. Om endpointen avvisades eller raderna
+  // saknas (t.ex. ny serie utan registrerad statistik) skickar vi vidare
+  // null så buildPreGameStatsSide kan rendera "-" istället för krasch.
+  const ppRows = ppRes.status === 'fulfilled' && Array.isArray(ppRes.value.data?.PPStatisticsRows)
+    ? ppRes.value.data.PPStatisticsRows
+    : [];
+  const homePp = ppRows.find(r => r.TeamID === pre.HomeTeamID) || null;
+  const awayPp = ppRows.find(r => r.TeamID === pre.AwayTeamID) || null;
+
+  return {
+    matchDateTime:   pre.MatchDateTime || '',
+    venueName:       pre.VenueName     || '',
+    competitionName: pre.CompetitionName || '',
+    home: buildPreGameStatsSide(pre, 'home', homePp),
+    away: buildPreGameStatsSide(pre, 'away', awayPp)
   };
 }
 
@@ -366,10 +564,11 @@ async function fetchInnebandyAll(matchUrl) {
   const fixturesUrl        = `https://stats.innebandy.se/sasong/${season}/serie/${competition}/spelprogram`;
 
   // Parallell hämtning – misslyckas en sida fortsätter de andra ändå
-  const [lineupRes, standingsRes, fixturesRes] = await Promise.allSettled([
+  const [lineupRes, standingsRes, fixturesRes, preGameRes] = await Promise.allSettled([
     fetchInnebandyLineup(normalizedMatchUrl),
     fetchInnebandyStandings(standingsUrl),
-    fetchInnebandyFixtures(normalizedMatchUrl)
+    fetchInnebandyFixtures(normalizedMatchUrl),
+    fetchInnebandyPreGameStats(normalizedMatchUrl)
   ]);
 
   // Match-data är obligatorisk – utan den finns inget meningsfullt att returnera
@@ -399,7 +598,9 @@ async function fetchInnebandyAll(matchUrl) {
     standingsError: null,
     fixtures:       [],
     fixturesTitle:  '',
-    fixturesError:  null
+    fixturesError:  null,
+    preGameStats:   null,
+    preGameStatsError: null
   };
 
   if (standingsRes.status === 'fulfilled') {
@@ -414,6 +615,12 @@ async function fetchInnebandyAll(matchUrl) {
     out.fixturesTitle = fixturesRes.value.roundName;
   } else {
     out.fixturesError = fixturesRes.reason.message;
+  }
+
+  if (preGameRes.status === 'fulfilled') {
+    out.preGameStats = preGameRes.value;
+  } else {
+    out.preGameStatsError = preGameRes.reason.message;
   }
 
   return out;
@@ -649,7 +856,8 @@ io.on('connection', (socket) => {
     // beteende som HTTP-rutten /api/graphic/clear.
     const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
-                     'commentators', 'matchup', 'intermission', 'playerLowerThird', 'none'];
+                     'commentators', 'matchup', 'intermission', 'playerLowerThird',
+                     'preGameStats', 'none'];
     if (!allowed.includes(target)) return;
     graphicState.activeGraphic = target;
     io.emit('switchGraphic', { to: target });
@@ -662,12 +870,22 @@ io.on('connection', (socket) => {
     console.log(`Hämtar all data: ${url}`);
     try {
       const data = await fetchInnebandyAll(url);
+
+      // Spegla in preGameStats i serverns state direkt – på samma sätt som
+      // lineups/standings/fixtures – så ny OBS-anslutning eller producent
+      // som öppnar kontrollpanelen efteråt får färska siffror utan refetch.
+      matchState.preGameStats = data.preGameStats || null;
+      io.emit('stateUpdate', matchState);
+
       socket.emit('fetch_result_innebandy_all_data', data);
 
       const tabStatus = data.standings
         ? `${data.standings.length} lag (${data.standingsName})`
         : `EJ HÄMTAD (${data.standingsError})`;
-      console.log(`  → ${data.match.homeTeam} (${data.match.homeRoster.length}) vs ${data.match.awayTeam} (${data.match.awayRoster.length}) | Tabell: ${tabStatus}`);
+      const preStatus = data.preGameStats
+        ? 'OK'
+        : `EJ HÄMTAD (${data.preGameStatsError})`;
+      console.log(`  → ${data.match.homeTeam} (${data.match.homeRoster.length}) vs ${data.match.awayTeam} (${data.match.awayRoster.length}) | Tabell: ${tabStatus} | Pregame: ${preStatus}`);
     } catch (err) {
       console.error(`  → Fel: ${err.message}`);
       socket.emit('fetch_error', {
@@ -868,7 +1086,7 @@ app.get('/api/graphic/commentators/toggle', (_req, res) => {
 
 app.get('/api/graphic/:target', (req, res) => {
   const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
-                   'commentators', 'matchup', 'intermission', 'clear'];
+                   'commentators', 'matchup', 'intermission', 'preGameStats', 'clear'];
   const target  = req.params.target;
   if (!allowed.includes(target)) {
     return res.status(400).json({ success: false, error: `Okänd grafik: ${target}` });
@@ -918,6 +1136,12 @@ app.get('/api/graphic/:target', (req, res) => {
     return res.status(400).json({
       success: false,
       error: 'Ingen omgångsdata lagrad. Hämta en match i kontrollpanelen först.'
+    });
+  }
+  if (to === 'preGameStats' && !matchState.preGameStats) {
+    return res.status(400).json({
+      success: false,
+      error: 'Ingen statistik inför match lagrad. Hämta en match i kontrollpanelen först.'
     });
   }
 
