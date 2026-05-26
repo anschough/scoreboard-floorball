@@ -263,6 +263,58 @@ document.querySelectorAll('.btn-penalty').forEach(btn => {
   });
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// TIME-OUT
+// ════════════════════════════════════════════════════════════════════════════
+const btnTimeOutHome  = document.getElementById('btnTimeOutHome');
+const btnTimeOutAway  = document.getElementById('btnTimeOutAway');
+const btnTimeOutClear = document.getElementById('btnTimeOutClear');
+const elTimeOutStatus = document.getElementById('timeoutStatus');
+
+// Senast kända lagnamn så vi kan visa "Hemma · LAG A" i statusrutan
+let latestTeamA = 'Hemma';
+let latestTeamB = 'Borta';
+
+function renderTimeOutStatus(timeOut) {
+  if (!elTimeOutStatus) return;
+  if (!timeOut) {
+    elTimeOutStatus.classList.remove('is-active');
+    elTimeOutStatus.innerHTML = '<span class="timeout-status-empty">Ingen aktiv time-out</span>';
+    [btnTimeOutHome, btnTimeOutAway].forEach(b => b && (b.disabled = false));
+    if (btnTimeOutClear) btnTimeOutClear.disabled = true;
+    return;
+  }
+  const teamLabel = timeOut.team === 'home' ? `Hemma · ${latestTeamA}` : `Borta · ${latestTeamB}`;
+  const isFinal   = timeOut.remaining <= 5;
+  elTimeOutStatus.classList.add('is-active');
+  elTimeOutStatus.innerHTML = `
+    <span class="timeout-status-team">${teamLabel}</span>
+    <span class="timeout-status-count${isFinal ? ' is-final' : ''}">${timeOut.remaining} s</span>`;
+  // Bara en time-out åt gången – disabla start-knappar tills den avslutats
+  [btnTimeOutHome, btnTimeOutAway].forEach(b => b && (b.disabled = true));
+  if (btnTimeOutClear) btnTimeOutClear.disabled = false;
+}
+
+[btnTimeOutHome, btnTimeOutAway].forEach(btn => {
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const team = btn.dataset.team;
+    socket.emit('timeOutStart', { team });
+    // Visa grafiken direkt – samma one-click-UX som Stream Deck-rutten
+    socket.emit('switchGraphic', { to: 'timeout' });
+  });
+});
+if (btnTimeOutClear) {
+  btnTimeOutClear.addEventListener('click', () => {
+    socket.emit('timeOutClear');
+    socket.emit('switchGraphic', { to: 'scoreboard' });
+  });
+}
+
+socket.on('timeOutUpdate', ({ timeOut } = {}) => {
+  renderTimeOutStatus(timeOut);
+});
+
 // Riktade penalty-uppdateringar (kommer varje sekund från klock-loopen
 // när utvisningar är aktiva). Använder samma render som stateUpdate så
 // inga element rebuildas i onödan.
@@ -312,6 +364,9 @@ socket.on('stateUpdate', (state) => {
   if (document.activeElement !== inputTeamBShort) inputTeamBShort.value = state.teamBShort || '';
   labelA.textContent        = state.teamA;
   labelB.textContent        = state.teamB;
+  // Cache:a lagnamn så time-out-statusrutan kan visa "Hemma · LAG A"
+  latestTeamA = state.teamA || 'Hemma';
+  latestTeamB = state.teamB || 'Borta';
   displayScoreA.textContent = state.scoreA;
   displayScoreB.textContent = state.scoreB;
   displayClock.textContent  = state.clock;
@@ -338,6 +393,9 @@ socket.on('stateUpdate', (state) => {
   // gång state ändras icke-relaterat till klocktick (penaltiesUpdate sköter
   // sekund-för-sekund-uppdateringen så den här gör ingen flash).
   applyPenalties(state.penaltiesHome, state.penaltiesAway);
+
+  // Hydrera time-out-status (för operatör som ansluter mitt under en pågående)
+  renderTimeOutStatus(state.timeOut);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });

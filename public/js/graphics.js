@@ -63,11 +63,16 @@ const elIntermissionHomeLogo = document.getElementById('intermissionHomeLogo');
 const elIntermissionAwayLogo = document.getElementById('intermissionAwayLogo');
 const elIntermissionWaiting  = document.getElementById('intermissionWaiting');
 
+// Time-out (pill dockad under scoreboarden)
+const elTimeOut       = document.getElementById('timeout-graphic');
+const elTimeOutName   = document.getElementById('timeoutTeamName');
+
 // Sponsor-strip (rullande logos längst ner)
 const elSponsorStrip = document.getElementById('sponsor-strip');
 const elSponsorTrack = document.getElementById('sponsorTrack');
 
 // Grafiker där sponsor-stripen alltid ska visas längst ner.
+// Time-out är medvetet INTE med – stripen ska INTE synas vid time-out.
 const SPONSOR_GRAPHICS = new Set(['matchup', 'intermission']);
 
 // Karta: state-nyckel → DOM-element
@@ -80,12 +85,15 @@ const graphicElements = {
   matchup:      elMatchup,
   intermission: elIntermission,
   playerLowerThird: elPlayerLt,
-  preGameStats: elPreGame
+  preGameStats: elPreGame,
+  timeout:      elTimeOut
 };
 
 // Grafiker som tillåter scoreboarden att stå kvar (lower-third overlays).
 // Kommentator-skylten visas numera på egen hand och är därför INTE en overlay.
-const SCOREBOARD_OVERLAYS = new Set();
+// Time-out är dockad direkt under scoreboarden så scoreboarden måste vara
+// kvar för att skylten ska sitta på rätt plats.
+const SCOREBOARD_OVERLAYS = new Set(['timeout']);
 const shouldShowScoreboard = (g) => g === 'scoreboard' || SCOREBOARD_OVERLAYS.has(g);
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -729,6 +737,10 @@ let lastPreGameStatsJson = '';
 
 /** Fullständigt state – vid anslutning och dataf-uppdateringar */
 socket.on('stateUpdate', (state) => {
+  // Spara senaste state så timeOutUpdate-tickar har tillgång till lagnamn/logos
+  lastKnownState = state;
+  // Rendera time-out om det finns ett i state:t (initial hydration vid connect)
+  if (state.timeOut) renderTimeOut(state.timeOut, state);
   // Poängtavla
   const prevA = parseInt(elScoreA.textContent, 10);
   const prevB = parseInt(elScoreB.textContent, 10);
@@ -909,6 +921,25 @@ socket.on('sponsorsUpdate', ({ sponsors } = {}) => {
   // Om en operatör laddar upp en första sponsor medan matchup är aktiv
   // ska stripen poppa in direkt utan att kräva en grafik-växling.
   applySponsorStripVisibility(activeKey);
+});
+
+// ── Time-out ─────────────────────────────────────────────────────────────────
+// Skylten är minimal: bara "TIME-OUT [LAGNAMN]". Servern auto-rensar
+// efter 30 sekunder så vi behöver bara hydrera lagnamnet när time-out
+// startas; sekund-tickarna ignoreras (vi visar ingen siffra).
+function renderTimeOut(timeOut, state) {
+  if (!elTimeOut || !timeOut) return;
+  const isHome = timeOut.team === 'home';
+  const teamName = (isHome ? state?.teamA : state?.teamB) || (isHome ? 'HEMMA' : 'BORTA');
+  elTimeOutName.textContent = teamName.toUpperCase();
+}
+
+// Senast kända state, så timeOutUpdate-tickar har tillgång till lagnamn/logos
+// utan att kräva en full stateUpdate på varje sekund.
+let lastKnownState = {};
+
+socket.on('timeOutUpdate', ({ timeOut } = {}) => {
+  renderTimeOut(timeOut, lastKnownState);
 });
 
 /**

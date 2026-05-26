@@ -1030,6 +1030,58 @@ input[type="text"].input-clock-set.input-error {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   TIME-OUT-KORT
+═══ */
+.timeout-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  margin-bottom: 10px;
+  min-height: 44px;
+}
+.timeout-status.is-active {
+  background: rgba(var(--lb-900-rgb), 0.14);
+  border-color: rgba(var(--lb-900-rgb), 0.4);
+}
+.timeout-status-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+.timeout-status-team {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent-hi);
+}
+.timeout-status-count {
+  font-family: var(--font-display, inherit);
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.timeout-status-count.is-final {
+  color: var(--err);
+  animation: timeoutCountPulse 1s ease-in-out infinite;
+}
+@keyframes timeoutCountPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+.timeout-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    PREVIEW-INNEHÅLL (uppställningar, tabell, fixtures)
 ═══ */
 .preview-box {

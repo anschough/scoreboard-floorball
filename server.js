@@ -62,7 +62,11 @@ let matchState = {
   // Statistik inför match (pregamestats + ppstatistics aggregerat).
   // null = ingen data hämtad än. När data finns: { home: {...}, away: {...} }
   // Se buildPreGameStats() för fältlistan.
-  preGameStats: null
+  preGameStats: null,
+  // Aktiv time-out. null = ingen pågående. När en startas:
+  //   { team: 'home'|'away', duration: 30, remaining: 30 }
+  // Tickas i realtid (oberoende av matchklockan) av timeOutInterval.
+  timeOut: null
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -288,6 +292,7 @@ function setClockSeconds(seconds) {
 // /venue/logos och växlar tillbaka till scoreboarden som default-grafik.
 function resetMatchState() {
   pauseClock();
+  stopTimeOut();
   elapsedSeconds = 0;
   matchState = {
     teamA: 'Lag A',
@@ -316,7 +321,8 @@ function resetMatchState() {
     playerLowerThird: null,
     penaltiesHome: [],
     penaltiesAway: [],
-    preGameStats: null
+    preGameStats: null,
+    timeOut: null
   };
   penaltySeq = 0;
   graphicState.activeGraphic = 'none';
@@ -325,6 +331,51 @@ function resetMatchState() {
   io.emit('clockStatus', { running: false });
   io.emit('matchStateReset');
   console.log('Matchdata nollställd');
+}
+
+// ── Time-out ─────────────────────────────────────────────────────────────────
+// IBF-regel: 30 sekunder realtid (inte matchklocka). Egen interval-loop så
+// den tickar även när matchklockan är pausad. Vid 0 → auto-clear + växla
+// tillbaka till scoreboarden så grafiken inte hänger kvar tom.
+const TIME_OUT_SECONDS = 30;
+let timeOutInterval = null;
+
+function broadcastTimeOut() {
+  io.emit('timeOutUpdate', { timeOut: matchState.timeOut });
+}
+
+function startTimeOut(team) {
+  const t = team === 'away' ? 'away' : team === 'home' ? 'home' : null;
+  if (!t) return null;
+  stopTimeOut();
+  matchState.timeOut = {
+    team:      t,
+    duration:  TIME_OUT_SECONDS,
+    remaining: TIME_OUT_SECONDS
+  };
+  broadcastTimeOut();
+  timeOutInterval = setInterval(() => {
+    if (!matchState.timeOut) { stopTimeOut(); return; }
+    matchState.timeOut.remaining -= 1;
+    if (matchState.timeOut.remaining <= 0) {
+      // Auto-avsluta: nolla state, broadcast, och hoppa tillbaka till
+      // scoreboarden så vi inte sitter med en tom time-out-skylt på skärmen.
+      stopTimeOut();
+      if (graphicState.activeGraphic === 'timeout') {
+        graphicState.activeGraphic = 'scoreboard';
+        io.emit('switchGraphic', { to: 'scoreboard' });
+      }
+    } else {
+      broadcastTimeOut();
+    }
+  }, 1000);
+  return matchState.timeOut;
+}
+
+function stopTimeOut() {
+  if (timeOutInterval) { clearInterval(timeOutInterval); timeOutInterval = null; }
+  matchState.timeOut = null;
+  broadcastTimeOut();
 }
 
 // ── Texthjälp ────────────────────────────────────────────────────────────────
@@ -857,6 +908,7 @@ io.on('connection', (socket) => {
   socket.emit('graphicState', graphicState);
   socket.emit('clockStatus', { running: matchState.clockRunning });
   socket.emit('sponsorsUpdate', sponsorState);
+  socket.emit('timeOutUpdate', { timeOut: matchState.timeOut });
 
   // ── Poängtavla ───────────────────────────────────────────────────────────
   safeOn(socket, 'updateNames', ({ teamA, teamB, teamAShort, teamBShort } = {}) => {
@@ -1009,7 +1061,7 @@ io.on('connection', (socket) => {
     const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
                      'commentators', 'matchup', 'intermission', 'playerLowerThird',
-                     'preGameStats', 'none'];
+                     'preGameStats', 'timeout', 'none'];
     if (!allowed.includes(target)) return;
     graphicState.activeGraphic = target;
     io.emit('switchGraphic', { to: target });
@@ -1045,6 +1097,14 @@ io.on('connection', (socket) => {
         message: err.message || 'Okänt fel vid hämtning'
       });
     }
+  });
+
+  // ── Time-out ─────────────────────────────────────────────────────────────
+  safeOn(socket, 'timeOutStart', ({ team } = {}) => {
+    startTimeOut(team);
+  });
+  safeOn(socket, 'timeOutClear', () => {
+    stopTimeOut();
   });
 
   // ── Utvisningar ──────────────────────────────────────────────────────────
@@ -1295,7 +1355,8 @@ app.get('/api/graphic/commentators/toggle', (_req, res) => {
 
 app.get('/api/graphic/:target', (req, res) => {
   const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
-                   'commentators', 'matchup', 'intermission', 'preGameStats', 'clear'];
+                   'commentators', 'matchup', 'intermission', 'preGameStats',
+                   'timeout', 'clear'];
   const target  = req.params.target;
   if (!allowed.includes(target)) {
     return res.status(400).json({ success: false, error: `Okänd grafik: ${target}` });
@@ -1353,6 +1414,12 @@ app.get('/api/graphic/:target', (req, res) => {
       error: 'Ingen statistik inför match lagrad. Hämta en match i kontrollpanelen först.'
     });
   }
+  if (to === 'timeout' && !matchState.timeOut) {
+    return res.status(400).json({
+      success: false,
+      error: 'Ingen time-out aktiv. Starta en time-out i kontrollpanelen först.'
+    });
+  }
 
   graphicState.activeGraphic = to;
   io.emit('switchGraphic', { to });
@@ -1381,6 +1448,31 @@ app.get('/api/period/reset', (_req, res) => {
 // ── Nollställ match ──────────────────────────────────────────────────────────
 app.get('/api/reset', (_req, res) => {
   resetMatchState();
+  res.json({ success: true });
+});
+
+// ── Time-out (Stream Deck) ──────────────────────────────────────────────────
+// /api/timeout/home/start  – startar 30s time-out för hemma + visar grafik
+// /api/timeout/away/start  – samma för borta
+// /api/timeout/clear       – avsluta och göm
+app.get('/api/timeout/:team/start', (req, res) => {
+  const team = req.params.team;
+  if (team !== 'home' && team !== 'away') {
+    return res.status(400).json({ success: false, error: 'Använd team=home eller team=away.' });
+  }
+  const t = startTimeOut(team);
+  // Visa grafiken direkt så Stream Deck blir en one-click-knapp
+  graphicState.activeGraphic = 'timeout';
+  io.emit('switchGraphic', { to: 'timeout' });
+  res.json({ success: true, timeOut: t });
+});
+
+app.get('/api/timeout/clear', (_req, res) => {
+  stopTimeOut();
+  if (graphicState.activeGraphic === 'timeout') {
+    graphicState.activeGraphic = 'scoreboard';
+    io.emit('switchGraphic', { to: 'scoreboard' });
+  }
   res.json({ success: true });
 });
 
@@ -1483,7 +1575,8 @@ app.get('/api/state', (_req, res) => {
     period:       matchState.period,
     activeGraphic: graphicState.activeGraphic,
     penaltiesHome: matchState.penaltiesHome,
-    penaltiesAway: matchState.penaltiesAway
+    penaltiesAway: matchState.penaltiesAway,
+    timeOut:       matchState.timeOut
   });
 });
 

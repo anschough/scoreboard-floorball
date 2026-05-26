@@ -19,18 +19,30 @@
          class="penalty-stack penalty-stack-home"
          aria-hidden="true"></div>
 
-    <div id="scoreboard">
-      <div class="team team-a">
-        <span class="team-name" id="teamA">Lag A</span>
-        <span class="score" id="scoreA">0</span>
+    <div class="scoreboard-col">
+      <div id="scoreboard">
+        <div class="team team-a">
+          <span class="team-name" id="teamA">Lag A</span>
+          <span class="score" id="scoreA">0</span>
+        </div>
+        <div class="divider">
+          <div class="period" id="period">P1</div>
+          <div class="clock" id="clock">00:00</div>
+        </div>
+        <div class="team team-b">
+          <span class="score" id="scoreB">0</span>
+          <span class="team-name" id="teamB">Lag B</span>
+        </div>
       </div>
-      <div class="divider">
-        <div class="period" id="period">P1</div>
-        <div class="clock" id="clock">00:00</div>
-      </div>
-      <div class="team team-b">
-        <span class="score" id="scoreB">0</span>
-        <span class="team-name" id="teamB">Lag B</span>
+
+      <!-- Time-out-pill dockad direkt under scoreboarden. Visar bara
+           "TIME-OUT [LAGNAMN]" – ingen countdown, ingen logga. Servern
+           rensar den automatiskt efter 30 sekunder. -->
+      <div id="timeout-graphic"
+           class="timeout-panel"
+           aria-hidden="true">
+        <span class="timeout-label">TIME-OUT</span>
+        <span class="timeout-team-name" id="timeoutTeamName">LAG</span>
       </div>
     </div>
 

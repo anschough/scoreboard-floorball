@@ -2100,6 +2100,80 @@ html, body {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   TIME-OUT-PILL – mörk pill dockad direkt under scoreboarden.
+   Speglar scoreboardens stil (mörk glasplatta + ljus underkant). Visar
+   bara "TIME-OUT [LAGNAMN]" – ingen siffra, ingen logga. Auto-rensas
+   av servern efter 30 sekunder.
+═══ */
+.scoreboard-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.timeout-panel {
+  pointer-events: auto;
+  background: rgba(3, 7, 14, 0.92);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 14px;
+  padding: 12px 28px;
+  box-shadow: var(--glass-shadow);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.35s var(--ease-in),
+              max-height 0.35s var(--ease-in),
+              padding-top 0.35s var(--ease-in),
+              padding-bottom 0.35s var(--ease-in);
+}
+.timeout-panel.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  max-height: 80px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  transition: opacity 0.5s var(--ease-out),
+              transform 0.5s var(--ease-snap),
+              max-height 0.5s var(--ease-out),
+              padding-top 0.5s var(--ease-out),
+              padding-bottom 0.5s var(--ease-out);
+}
+
+.timeout-label {
+  font-size: 0.95rem;
+  color: var(--sollentuna-lb-500);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.timeout-team-name {
+  font-size: 1.15rem;
+  color: var(--sollentuna-white);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    SPONSOR-STRIP – Rullande logos längst ner
    Visas under matchup- och intermission-grafiken (styrs via .visible-klassen
    från graphics.js). Track:en innehåller sponsorerna duplicerade så att

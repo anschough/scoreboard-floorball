@@ -47,6 +47,7 @@
           <button class="mixer-btn" data-graphic="fixtures"     aria-pressed="false" title="Visa omgångens matcher live">Omgång</button>
           <button class="mixer-btn" data-graphic="preGameStats" aria-pressed="false" title="Visa statistik inför match live">Stats inför match</button>
           <button class="mixer-btn" data-graphic="intermission" aria-pressed="false" title="Visa pausvila-skylten live (räknar ut nästa period)">Pausvila</button>
+          <button class="mixer-btn" data-graphic="timeout"      aria-pressed="false" title="Visa time-out-grafiken live (kräver att en time-out är startad)">Time-out</button>
         </nav>
       </div>
     </header>
@@ -197,6 +198,22 @@
               <button id="btnPeriodNext"  class="btn btn-primary">Nästa period</button>
               <button id="btnPeriodReset" class="btn btn-secondary">Återställ</button>
             </div>
+          </div>
+        </article>
+
+        <article class="dash-card live-card timeout-card">
+          <h2>Time-out</h2>
+          <p class="card-hint">
+            30 sekunders nedräkning i realtid. Grafiken visas automatiskt och
+            försvinner när tiden gått ut.
+          </p>
+          <div class="timeout-status" id="timeoutStatus">
+            <span class="timeout-status-empty">Ingen aktiv time-out</span>
+          </div>
+          <div class="timeout-buttons">
+            <button id="btnTimeOutHome"   class="btn btn-primary"   data-team="home">Hemma time-out</button>
+            <button id="btnTimeOutAway"   class="btn btn-primary"   data-team="away">Borta time-out</button>
+            <button id="btnTimeOutClear"  class="btn btn-secondary" disabled>Avsluta</button>
           </div>
         </article>
 
