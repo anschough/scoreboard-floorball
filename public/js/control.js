@@ -146,6 +146,12 @@ function formatPenaltyTime(seconds) {
   return `${m}:${String(ss).padStart(2, '0')}`;
 }
 
+// Tid för exit-animationen i CSS (.penalty-row.is-removing keyframe).
+// Hellre setTimeout än animationend: animationend är opålitlig när
+// keyframes animerar non-animatable värden (max-height: auto → 0) och kan
+// uteblir helt → raden fastnar i DOM med .is-removing klass för alltid.
+const PENALTY_EXIT_MS = 240;
+
 /**
  * Renderar en utvisningslista. Diffar mot DOM så befintliga rader bara
  * uppdaterar text (ingen flash) och borttagna rader animeras ut innan
@@ -154,12 +160,15 @@ function formatPenaltyTime(seconds) {
 function renderPenaltyList(listEl, penalties) {
   const incomingIds = new Set(penalties.map(p => String(p.id)));
 
-  // Steg 1: ta bort rader som inte längre finns i state
+  // Steg 1: ta bort rader som inte längre finns i state. Hoppa över alla
+  // li:s som inte är .penalty-row (t.ex. .penalty-empty), annars skulle de
+  // klassas som "ej i state" och få .is-removing utan motsvarande timer.
   Array.from(listEl.children).forEach(li => {
+    if (!li.classList.contains('penalty-row')) return;
     if (li.classList.contains('is-removing')) return;
     if (!incomingIds.has(li.dataset.id)) {
       li.classList.add('is-removing');
-      li.addEventListener('animationend', () => li.remove(), { once: true });
+      setTimeout(() => li.remove(), PENALTY_EXIT_MS);
     }
   });
 
@@ -179,6 +188,19 @@ function renderPenaltyList(listEl, penalties) {
     li.querySelector('.penalty-row-jersey').textContent = p.jersey ? `#${p.jersey}` : '';
     li.querySelector('.penalty-row-time').textContent   = formatPenaltyTime(p.remaining);
   });
+
+  // Steg 3: rendera/städa tom-läge som en riktig <li> så skärmläsare hör
+  // texten i stället för att möta en tom lista.
+  const hasRows  = !!listEl.querySelector('.penalty-row:not(.is-removing)');
+  let emptyLi    = listEl.querySelector('.penalty-empty');
+  if (!hasRows && !emptyLi) {
+    emptyLi = document.createElement('li');
+    emptyLi.className   = 'penalty-empty';
+    emptyLi.textContent = 'Inga aktiva';
+    listEl.appendChild(emptyLi);
+  } else if (hasRows && emptyLi) {
+    emptyLi.remove();
+  }
 }
 
 function updatePenaltyCounts(home, away) {
@@ -231,13 +253,17 @@ socket.on('penaltiesUpdate', ({ penaltiesHome, penaltiesAway }) => {
 // AKTIV GRAFIK-INDIKATOR
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Uppdaterar ON AIR-pillen + sätter .on-air på rätt mixer-knapp */
+/** Uppdaterar ON AIR-pillen + sätter .on-air på rätt mixer-knapp.
+   Speglar live-statusen till aria-pressed så skärmläsare kan höra
+   vilken grafik som är aktiv (R3). */
 function updateActiveIndicator(key) {
   activeInd.textContent = GRAPHIC_LABELS[key] || key;
   // Mappa 'none' (= göm allt) till mixerns 'clear'-knapp för visuell ON AIR
   const mixerKey = key === 'none' ? 'clear' : key;
   mixerBtns.forEach(btn => {
-    btn.classList.toggle('on-air', btn.dataset.graphic === mixerKey);
+    const isActive = btn.dataset.graphic === mixerKey;
+    btn.classList.toggle('on-air', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
 }
 
@@ -360,18 +386,35 @@ function parseMMSS(value) {
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
+// Behåller standard-hjälptexten så vi kan återställa den efter ett fel.
+const inputClockSetHint = document.getElementById('inputClockSetHint');
+const inputClockSetHintDefault = inputClockSetHint ? inputClockSetHint.textContent : '';
+
 function applyClockSet() {
   const sec = parseMMSS(inputClockSet.value);
   if (sec == null) {
-    // Visuell feedback för ogiltigt format
+    // Visuell + programmatisk feedback för ogiltigt format. aria-invalid +
+    // uppdaterad hint via aria-describedby gör att skärmläsare hör orsaken
+    // till skakningen i stället för bara den röda kanten.
     inputClockSet.classList.add('input-error');
+    inputClockSet.setAttribute('aria-invalid', 'true');
+    if (inputClockSetHint) {
+      inputClockSetHint.textContent =
+        'Ogiltigt format. Skriv tiden som MM:SS, exempelvis 12:30.';
+    }
     inputClockSet.focus();
     inputClockSet.select();
-    setTimeout(() => inputClockSet.classList.remove('input-error'), 700);
+    setTimeout(() => {
+      inputClockSet.classList.remove('input-error');
+      inputClockSet.removeAttribute('aria-invalid');
+      if (inputClockSetHint) inputClockSetHint.textContent = inputClockSetHintDefault;
+    }, 1800);
     return;
   }
   socket.emit('clockSet', { seconds: sec });
   inputClockSet.value = '';
+  inputClockSet.removeAttribute('aria-invalid');
+  if (inputClockSetHint) inputClockSetHint.textContent = inputClockSetHintDefault;
   inputClockSet.blur();
 }
 
@@ -444,6 +487,12 @@ socket.on('matchStateReset', () => {
   if (fetchStatusAll) setStatus(fetchStatusAll, '');
   if (urlMatchAll) urlMatchAll.value = '';
   try { localStorage.removeItem(LS_URL_KEY); } catch (_) {}
+  // Nollställ hydreringscache så nästa match säkert får färska renders
+  lastHydrateLineupHome = '';
+  lastHydrateLineupAway = '';
+  lastHydrateTable      = '';
+  lastHydrateFixtures   = '';
+  lastHydratePreGame    = '';
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -456,7 +505,8 @@ function setStatus(el, text, type = '') {
   el.className    = `fetch-status${type ? ` ${type}` : ''}`;
 }
 
-/** Sätt om det är klickbart från context (team + teamName) */
+/** Sätt om det är klickbart från context (team + teamName).
+ *  IBIS-data (player) escape:as innan den sätts via innerHTML. */
 function renderPreviewPlayers(containerEl, players, ctx) {
   containerEl.innerHTML = '';
   const clickable = !!(ctx && ctx.team);
@@ -472,7 +522,7 @@ function renderPreviewPlayers(containerEl, players, ctx) {
     if (hasNum) {
       number = parts.shift();
       name   = parts.join(' ');
-      div.innerHTML = `<span class="preview-player-num">${number}</span>${name}`;
+      div.innerHTML = `<span class="preview-player-num">${escapeHtml(number)}</span>${escapeHtml(name)}`;
     } else {
       div.textContent = player;
     }
@@ -491,7 +541,8 @@ function renderPreviewPlayers(containerEl, players, ctx) {
   applyActiveLowerThirdHighlight();
 }
 
-/** Renderar ledare/staff under spelarlistan (samma look + klickbarhet). */
+/** Renderar ledare/staff under spelarlistan (samma look + klickbarhet).
+ *  IBIS-data escape:as innan den sätts via innerHTML. */
 function renderPreviewLeaders(wrapEl, listEl, leaders, ctx) {
   listEl.innerHTML = '';
   if (!leaders || !leaders.length) {
@@ -505,7 +556,7 @@ function renderPreviewLeaders(wrapEl, listEl, leaders, ctx) {
     div.className = 'preview-player' + (clickable ? ' is-clickable' : '');
     const role = (l.role || '').trim();
     const name = (l.name || '').trim();
-    div.innerHTML = `<span class="preview-player-role">${role}</span>${name}`;
+    div.innerHTML = `<span class="preview-player-role">${escapeHtml(role)}</span>${escapeHtml(name)}`;
     if (clickable) {
       div.dataset.team     = ctx.team;
       div.dataset.teamName = ctx.teamName || '';
@@ -527,10 +578,11 @@ function applyActiveLowerThirdHighlight() {
   });
 }
 
-/** Formaterar en match: "5–2" om spelad, annars "FRE 15/3 16:00" */
+/** Formaterar en match: "5–2" om spelad, annars "FRE 15/3 16:00".
+ *  Returnerar HTML när matchen är spelad (escape:ar siffrorna defensivt). */
 function formatFixtureMiddle(f) {
   if (f.isFinished && f.homeGoals != null) {
-    return `<span class="pf-result">${f.homeGoals}–${f.awayGoals}</span>`;
+    return `<span class="pf-result">${escapeHtml(f.homeGoals)}–${escapeHtml(f.awayGoals)}</span>`;
   }
   if (!f.matchDateTime) return '';
   const d = new Date(f.matchDateTime);
@@ -539,21 +591,22 @@ function formatFixtureMiddle(f) {
   return `${days[d.getDay()]} ${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-/** Renderar fixtures-listan i preview (hemma · resultat/tid · borta) */
+/** Renderar fixtures-listan i preview (hemma · resultat/tid · borta).
+ *  IBIS-data escape:as. formatFixtureMiddle returnerar redan säker HTML. */
 function renderPreviewFixtures(containerEl, fixtures) {
   containerEl.innerHTML = '';
   fixtures.forEach(f => {
     const row = document.createElement('div');
     row.className = 'preview-fixture';
-    const lh = f.homeLogo ? `<img class="pf-logo" src="${f.homeLogo}" alt="">` : '';
-    const la = f.awayLogo ? `<img class="pf-logo" src="${f.awayLogo}" alt="">` : '';
+    const lh = f.homeLogo ? `<img class="pf-logo" src="${escapeHtml(f.homeLogo)}" alt="">` : '';
+    const la = f.awayLogo ? `<img class="pf-logo" src="${escapeHtml(f.awayLogo)}" alt="">` : '';
     row.innerHTML = `
       <span class="pf-home">
-        <span class="pf-name">${f.homeTeam}</span>${lh}
+        <span class="pf-name">${escapeHtml(f.homeTeam)}</span>${lh}
       </span>
       <span class="pf-middle">${formatFixtureMiddle(f)}</span>
       <span class="pf-away">
-        ${la}<span class="pf-name">${f.awayTeam}</span>
+        ${la}<span class="pf-name">${escapeHtml(f.awayTeam)}</span>
       </span>`;
     containerEl.appendChild(row);
   });
@@ -623,28 +676,29 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** Renderar tabellrader i preview-tabellen (logo + 9 kolumner). */
+/** Renderar tabellrader i preview-tabellen (logo + 9 kolumner).
+ *  IBIS-fält (row.team m.fl.) escape:as för säker innerHTML-insättning. */
 function renderPreviewTable(tbodyEl, rows) {
   tbodyEl.innerHTML = '';
   rows.forEach(row => {
     const tr = document.createElement('tr');
     const logoHtml = row.logo
-      ? `<img src="${row.logo}" alt="" class="preview-logo">`
+      ? `<img src="${escapeHtml(row.logo)}" alt="" class="preview-logo">`
       : '';
     const record = (row.goalsFor != null && row.goalsAgainst != null)
-      ? `${row.goalsFor}–${row.goalsAgainst}`
+      ? `${escapeHtml(row.goalsFor)}–${escapeHtml(row.goalsAgainst)}`
       : '';
     tr.innerHTML = `
       <td>${logoHtml}</td>
-      <td>${row.pos}</td>
-      <td>${row.team}</td>
-      <td>${row.played}</td>
-      <td>${row.wins ?? ''}</td>
-      <td>${row.draws ?? ''}</td>
-      <td>${row.losses ?? ''}</td>
+      <td>${escapeHtml(row.pos)}</td>
+      <td>${escapeHtml(row.team)}</td>
+      <td>${escapeHtml(row.played)}</td>
+      <td>${escapeHtml(row.wins ?? '')}</td>
+      <td>${escapeHtml(row.draws ?? '')}</td>
+      <td>${escapeHtml(row.losses ?? '')}</td>
       <td>${record}</td>
-      <td>${row.diff ?? ''}</td>
-      <td>${row.points}</td>`;
+      <td>${escapeHtml(row.diff ?? '')}</td>
+      <td>${escapeHtml(row.points)}</td>`;
     tbodyEl.appendChild(tr);
   });
 }
@@ -660,6 +714,15 @@ const savedUrl = localStorage.getItem(LS_URL_KEY);
 if (savedUrl && urlMatchAll && !urlMatchAll.value) {
   urlMatchAll.value = savedUrl;
 }
+
+// Cache av senast hydrerad data – undviker att rebuild:a hela DOM-trädet
+// för previews på varje stateUpdate (vilket triggas av score-/klock-/period-
+// ändringar). Innehållet är litet (en match) så stringify är försumbart.
+let lastHydrateLineupHome = '';
+let lastHydrateLineupAway = '';
+let lastHydrateTable      = '';
+let lastHydrateFixtures   = '';
+let lastHydratePreGame    = '';
 
 // Fyller previews från ett stateUpdate-objekt. Idempotent – körs vid varje
 // stateUpdate utan att skada pågående interaktion.
@@ -682,10 +745,14 @@ function hydratePreviewsFromState(state) {
     };
     previewIbHomeName.textContent  = state.teamA;
     previewIbHomeCount.textContent = `${state.lineupHome.length} spelare`;
-    renderPreviewPlayers(previewIbHomeList, state.lineupHome,
-      { team: 'home', teamName: state.teamA });
-    renderPreviewLeaders(previewIbHomeLeadersWrap, previewIbHomeLeadersList,
-      state.lineupHomeLeaders || [], { team: 'home', teamName: state.teamA });
+    const homeKey = JSON.stringify([state.teamA, state.lineupHome, state.lineupHomeLeaders || []]);
+    if (homeKey !== lastHydrateLineupHome) {
+      renderPreviewPlayers(previewIbHomeList, state.lineupHome,
+        { team: 'home', teamName: state.teamA });
+      renderPreviewLeaders(previewIbHomeLeadersWrap, previewIbHomeLeadersList,
+        state.lineupHomeLeaders || [], { team: 'home', teamName: state.teamA });
+      lastHydrateLineupHome = homeKey;
+    }
     previewInnebandyLineup.hidden = false;
   }
   if (state.lineupAway?.length) {
@@ -696,15 +763,23 @@ function hydratePreviewsFromState(state) {
     };
     previewIbAwayName.textContent  = state.teamB;
     previewIbAwayCount.textContent = `${state.lineupAway.length} spelare`;
-    renderPreviewPlayers(previewIbAwayList, state.lineupAway,
-      { team: 'away', teamName: state.teamB });
-    renderPreviewLeaders(previewIbAwayLeadersWrap, previewIbAwayLeadersList,
-      state.lineupAwayLeaders || [], { team: 'away', teamName: state.teamB });
+    const awayKey = JSON.stringify([state.teamB, state.lineupAway, state.lineupAwayLeaders || []]);
+    if (awayKey !== lastHydrateLineupAway) {
+      renderPreviewPlayers(previewIbAwayList, state.lineupAway,
+        { team: 'away', teamName: state.teamB });
+      renderPreviewLeaders(previewIbAwayLeadersWrap, previewIbAwayLeadersList,
+        state.lineupAwayLeaders || [], { team: 'away', teamName: state.teamB });
+      lastHydrateLineupAway = awayKey;
+    }
     previewInnebandyLineup.hidden = false;
   }
   if (state.table?.length) {
     pendingInnebandyTable = { name: state.tableName || '', rows: state.table };
-    renderPreviewTable(previewInnebandyTableBody, state.table);
+    const tableKey = JSON.stringify([state.tableName, state.table]);
+    if (tableKey !== lastHydrateTable) {
+      renderPreviewTable(previewInnebandyTableBody, state.table);
+      lastHydrateTable = tableKey;
+    }
     previewInnebandyTableCount.textContent = state.tableName
       ? `${state.tableName} – ${state.table.length} lag`
       : `${state.table.length} lag`;
@@ -712,14 +787,22 @@ function hydratePreviewsFromState(state) {
   }
   if (state.fixtures?.length) {
     pendingFixtures = { title: state.fixturesTitle || '', fixtures: state.fixtures };
-    renderPreviewFixtures(previewFixturesList, state.fixtures);
+    const fixturesKey = JSON.stringify([state.fixturesTitle, state.fixtures]);
+    if (fixturesKey !== lastHydrateFixtures) {
+      renderPreviewFixtures(previewFixturesList, state.fixtures);
+      lastHydrateFixtures = fixturesKey;
+    }
     previewFixturesCount.textContent = state.fixturesTitle
       ? `${state.fixturesTitle} – ${state.fixtures.length} matcher`
       : `${state.fixtures.length} matcher`;
     previewFixtures.hidden = false;
   }
   if (state.preGameStats) {
-    renderPreGamePreview(state.preGameStats);
+    const preGameKey = JSON.stringify(state.preGameStats);
+    if (preGameKey !== lastHydratePreGame) {
+      renderPreGamePreview(state.preGameStats);
+      lastHydratePreGame = preGameKey;
+    }
   }
   applyActiveLowerThirdHighlight();
 }
@@ -948,40 +1031,8 @@ btnClearPreGame.addEventListener('click', () => {
   previewPreGame.hidden = true;
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// FLIK 4 – STREAM DECK HTTP-API DOKUMENTATION
-// Visar bas-URL utifrån var kontrollpanelen körs så rutterna kan klistras
-// direkt in i Stream Deck. Klick på en rutt kopierar hela URL:en till urklipp.
-// ════════════════════════════════════════════════════════════════════════════
-
-const apiBaseUrlEl  = document.getElementById('apiBaseUrl');
-const apiCopyToast  = document.getElementById('apiCopyToast');
-
-if (apiBaseUrlEl) {
-  apiBaseUrlEl.textContent = window.location.origin;
-}
-
-// Delegerad click-handler: kopiera full URL för alla .api-route-koder
-document.addEventListener('click', async (e) => {
-  const codeEl = e.target.closest('.api-route');
-  if (!codeEl) return;
-  const fullUrl = window.location.origin + codeEl.textContent.trim();
-  try {
-    await navigator.clipboard.writeText(fullUrl);
-    if (apiCopyToast) {
-      apiCopyToast.hidden = false;
-      // Trigga reflow så animationen kan spelas om vid upprepade klick
-      apiCopyToast.style.animation = 'none';
-      void apiCopyToast.offsetWidth;
-      apiCopyToast.style.animation = '';
-      // Göm efter animationen slutar (1.4s)
-      clearTimeout(apiCopyToast._t);
-      apiCopyToast._t = setTimeout(() => { apiCopyToast.hidden = true; }, 1400);
-    }
-  } catch (err) {
-    console.error('Kunde inte kopiera till urklipp:', err);
-  }
-});
+// (Tidigare api-docs-handler togs bort – api-docs.html laddar inte control.js
+//  utan har egen inline-skript för kopiering. Hela blocket var dead code här.)
 
 // ════════════════════════════════════════════════════════════════════════════
 // FEL-HANTERING

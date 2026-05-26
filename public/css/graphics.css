@@ -55,6 +55,22 @@
 /* ── Reset & bas ─────────────────────────────────────────────────────────── */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ── Tillgänglighet: reducerad rörelse ──────────────────────────────────
+   Stänger av loop-animationer (traveler-glow, on-air-puls, klockans
+   kolon-puls, score-bump, kaskader). Visnings-/dölj-transitions körs
+   nästan momentant så broadcast-staten fortfarande är synlig. Graphics-
+   sidan används primärt i OBS som inte respekterar prefers-reduced-motion,
+   så detta påverkar främst förhandsgranskning i en vanlig browser. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 html, body {
   width: 100%;
   height: 100%;

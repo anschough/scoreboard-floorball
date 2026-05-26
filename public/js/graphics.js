@@ -92,6 +92,7 @@ const ANIM_MS = 600;
 
 let activeKey     = 'scoreboard'; // Vad som är aktivt just nu
 let transitioning = false;        // Spärrar dubbla anrop under pågående byte
+let pendingTarget = null;         // Senaste begärda nyckel under pågående byte
 
 /**
  * Sätter ett elements synlighet direkt, utan fördröjning.
@@ -113,9 +114,25 @@ function setVisible(key, visible) {
  * Växlar mellan grafik-element. Hanterar både exklusiva grafiker (lineup,
  * table, fixtures, matchup) och lower-third overlays (commentators) som får
  * ligga ovanpå scoreboarden.
+ *
+ * Snabba klick under pågående transition tappas inte längre – senaste
+ * begärda mål sparas i pendingTarget och spelas upp när det aktuella bytet
+ * är klart. Det gör att Stream Deck-operatörer kan klicka snabbt och alltid
+ * landa på den sista grafiken de bad om.
  */
 function switchTo(targetKey) {
-  if (transitioning || targetKey === activeKey) return;
+  if (targetKey === activeKey && !transitioning) {
+    // Redan där – men om något står i kö (t.ex. de tryckte fram-och-tillbaka)
+    // så rensa det så vi inte hoppar tillbaka när nuvarande transition slutar.
+    pendingTarget = null;
+    return;
+  }
+  if (transitioning) {
+    // Spara senaste önskemålet. Tidigare väntande mål skrivs över – om
+    // användaren bytte sig genom 3 grafiker snabbt landar vi på den sista.
+    pendingTarget = targetKey;
+    return;
+  }
   transitioning = true;
 
   const fromKey            = activeKey;
@@ -143,7 +160,18 @@ function switchTo(targetKey) {
       if (targetKey === 'intermission') refreshIntermissionWaiting();
       setVisible(targetKey, true);
     }
-    setTimeout(() => { transitioning = false; }, ANIM_MS);
+    setTimeout(() => {
+      transitioning = false;
+      // Spela upp ev. väntat mål från queue:n. Om det redan är aktiveKey
+      // (användaren tryckte tillbaka) gör inget.
+      if (pendingTarget && pendingTarget !== activeKey) {
+        const next = pendingTarget;
+        pendingTarget = null;
+        switchTo(next);
+      } else {
+        pendingTarget = null;
+      }
+    }, ANIM_MS);
   }, ANIM_MS);
 }
 
@@ -157,18 +185,29 @@ function renderClock(value) {
   elClock.innerHTML = `${mm}<span class="colon">:</span>${ss}`;
 }
 
+// Längden på .score.bump-effekten. Vi tar bort klassen via setTimeout i
+// stället för transitionend: transitionend fyrar inte konsistent på span-
+// element i flex-layout (testat – Chrome rapporterar inga events), vilket
+// gör att .bump fastnar och poängen står kvar uppskalad/färgad permanent.
+const SCORE_BUMP_MS = 360;
+
 /** Bounce-animation på poängsiffran */
 function bumpScore(el) {
+  // Rensa ev. pågående bump och starta om
+  clearTimeout(el._bumpTimer);
   el.classList.remove('bump');
-  void el.offsetWidth; // Tvinga reflow så animation startar om
+  void el.offsetWidth; // Tvinga reflow så transitionen startar om
   el.classList.add('bump');
-  el.addEventListener('transitionend', () => el.classList.remove('bump'), { once: true });
+  el._bumpTimer = setTimeout(() => el.classList.remove('bump'), SCORE_BUMP_MS);
 }
 
 /**
  * Renderar spelarrutnätet i en uppställningspanel.
  * Extraherar tröjnummer om raden börjar med en siffra.
  * animation-delay sätts per spelare för kaskad-effekt.
+ *
+ * Spelarnamn kommer från IBIS – escapeHtmlGfx() krävs för att skydda mot
+ * eventuella HTML-tecken (säkerhetsåtgärd, även om risken är minimal).
  */
 function renderLineup(gridEl, players) {
   gridEl.innerHTML = '';
@@ -186,18 +225,24 @@ function renderLineup(gridEl, players) {
     if (hasNum) {
       const num  = parts.shift();
       row.innerHTML = `
-        <span class="player-num">${num}</span>
-        <span class="player-name">${parts.join(' ')}</span>`;
+        <span class="player-num">${escapeHtmlGfx(num)}</span>
+        <span class="player-name">${escapeHtmlGfx(parts.join(' '))}</span>`;
     } else {
-      row.innerHTML = `<span class="player-name">${player}</span>`;
+      row.innerHTML = `<span class="player-name">${escapeHtmlGfx(player)}</span>`;
     }
 
     gridEl.appendChild(row);
   });
 }
 
-/** Renderar lagets logotyp – fallback till en cirkel med första bokstaven */
+/** Renderar lagets logotyp – fallback till en cirkel med första bokstaven.
+ *  Memoiserar på (url, teamName) via data-rendered-key så vi inte bygger
+ *  om <img>:n på varje stateUpdate (vilket annars hade gett en kort flicker
+ *  varje gång en match är live och något ändras i state). */
 function renderLogo(wrapEl, url, teamName) {
+  const key = `${url || ''}|${teamName || ''}`;
+  if (wrapEl.dataset.renderedKey === key) return;
+  wrapEl.dataset.renderedKey = key;
   wrapEl.innerHTML = '';
   if (url) {
     const img = new Image();
@@ -341,7 +386,8 @@ function formatMatchStart(iso) {
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-/** Renderar ledare/staff. Format: "ROLL · Förnamn Efternamn" per rad */
+/** Renderar ledare/staff. Format: "ROLL · Förnamn Efternamn" per rad.
+ *  Roll/namn kommer från IBIS – escape:as för säker innerHTML-insättning. */
 function renderLeaders(containerEl, leaders) {
   containerEl.innerHTML = '';
   containerEl.style.removeProperty('--leader-role-width');
@@ -350,8 +396,8 @@ function renderLeaders(containerEl, leaders) {
     const row = document.createElement('div');
     row.className = 'leader-row';
     row.innerHTML = `
-      <span class="leader-role">${l.role || ''}</span>
-      <span class="leader-name">${l.name || ''}</span>`;
+      <span class="leader-role">${escapeHtmlGfx(l.role || '')}</span>
+      <span class="leader-name">${escapeHtmlGfx(l.name || '')}</span>`;
     containerEl.appendChild(row);
   });
   // Mät bredaste roll i containern och sätt som min-width så att alla
@@ -384,8 +430,8 @@ function renderPlayerLowerThird(data) {
   elPlayerLtNum.textContent  = data.number || '';
   elPlayerLtRole.textContent = (data.role || '').toUpperCase();
   elPlayerLtName.textContent = data.name || '';
-  elPlayerLt.classList.toggle('has-number', !!data.number);
-  elPlayerLt.classList.toggle('has-role',   !data.number && !!data.role);
+  // .player-lt-num:empty och .player-lt-role:empty döljer själva sina spans
+  // via CSS – ingen extra klass-toggle behövs.
 }
 
 /** Formaterar matchtid till "FRE 15/3" + "16:00" för fixtures-listan */
@@ -412,8 +458,8 @@ function renderFixtures(fixtures) {
     // Stagger efter att panelen + header glidit in: ~0.55s baseline + 0.06s/rad
     row.style.animationDelay = `${0.55 + i * 0.06}s`;
 
-    const logoHome = f.homeLogo ? `<img class="fix-team-logo" src="${f.homeLogo}" alt="" loading="lazy">` : '';
-    const logoAway = f.awayLogo ? `<img class="fix-team-logo" src="${f.awayLogo}" alt="" loading="lazy">` : '';
+    const logoHome = f.homeLogo ? `<img class="fix-team-logo" src="${escapeHtmlGfx(f.homeLogo)}" alt="" loading="lazy">` : '';
+    const logoAway = f.awayLogo ? `<img class="fix-team-logo" src="${escapeHtmlGfx(f.awayLogo)}" alt="" loading="lazy">` : '';
 
     let middleHtml;
     if (f.isFinished) {
@@ -421,10 +467,11 @@ function renderFixtures(fixtures) {
       const aWin = f.awayGoals > f.homeGoals ? 'fix-score-winner' : '';
       middleHtml = `
         <div class="fix-result">
-          <span class="${hWin}">${f.homeGoals}</span><span class="fix-score-sep">–</span><span class="${aWin}">${f.awayGoals}</span>
+          <span class="${hWin}">${escapeHtmlGfx(f.homeGoals)}</span><span class="fix-score-sep">–</span><span class="${aWin}">${escapeHtmlGfx(f.awayGoals)}</span>
         </div>`;
     } else {
       const { date, time } = formatFixtureTime(f.matchDateTime);
+      // date/time formaterades av vår egen kod – säkra strängar utan användarinnehåll
       middleHtml = `
         <div class="fix-time">
           <span class="fix-time-date">${date}</span>
@@ -434,13 +481,13 @@ function renderFixtures(fixtures) {
 
     row.innerHTML = `
       <div class="fix-side fix-side-home">
-        <span class="fix-team-name">${f.homeTeam}</span>
+        <span class="fix-team-name">${escapeHtmlGfx(f.homeTeam)}</span>
         ${logoHome}
       </div>
       <div class="fix-middle">${middleHtml}</div>
       <div class="fix-side fix-side-away">
         ${logoAway}
-        <span class="fix-team-name">${f.awayTeam}</span>
+        <span class="fix-team-name">${escapeHtmlGfx(f.awayTeam)}</span>
       </div>`;
     elFixturesList.appendChild(row);
   });
@@ -457,25 +504,25 @@ function renderTable(rows) {
     // Header tar 0.28s + 0.35s, sen tabellen 0.40s + 0.35s = ~0.55s baseline
     tr.style.animationDelay = `${0.55 + i * 0.05}s`;
 
-    const posClass = `td-pos col-pos${row.pos <= 3 ? ` pos-${row.pos}` : ''}`;
     const logoHtml = row.logo
-      ? `<img src="${row.logo}" alt="" class="team-logo" loading="lazy">`
+      ? `<img src="${escapeHtmlGfx(row.logo)}" alt="" class="team-logo" loading="lazy">`
       : '';
     const record = (row.goalsFor != null && row.goalsAgainst != null)
-      ? `${row.goalsFor}–${row.goalsAgainst}`
+      ? `${escapeHtmlGfx(row.goalsFor)}–${escapeHtmlGfx(row.goalsAgainst)}`
       : '';
 
+    // IBIS-fält (row.team m.fl.) escape:as för säker innerHTML-insättning.
     tr.innerHTML = `
       <td class="td-logo col-logo">${logoHtml}</td>
-      <td class="${posClass}">${row.pos}</td>
-      <td class="td-team col-team">${row.team}</td>
-      <td class="td-num col-num">${row.played}</td>
-      <td class="td-num col-num">${row.wins ?? ''}</td>
-      <td class="td-num col-num">${row.draws ?? ''}</td>
-      <td class="td-num col-num">${row.losses ?? ''}</td>
+      <td class="td-pos col-pos">${escapeHtmlGfx(row.pos)}</td>
+      <td class="td-team col-team">${escapeHtmlGfx(row.team)}</td>
+      <td class="td-num col-num">${escapeHtmlGfx(row.played)}</td>
+      <td class="td-num col-num">${escapeHtmlGfx(row.wins ?? '')}</td>
+      <td class="td-num col-num">${escapeHtmlGfx(row.draws ?? '')}</td>
+      <td class="td-num col-num">${escapeHtmlGfx(row.losses ?? '')}</td>
       <td class="td-num col-record">${record}</td>
-      <td class="td-num col-diff">${row.diff ?? ''}</td>
-      <td class="td-num td-points col-num">${row.points}</td>`;
+      <td class="td-num col-diff">${escapeHtmlGfx(row.diff ?? '')}</td>
+      <td class="td-num td-points col-num">${escapeHtmlGfx(row.points)}</td>`;
     elTableBody.appendChild(tr);
   });
 }
@@ -492,6 +539,12 @@ function formatPenaltyTime(seconds) {
   return `${m}:${String(ss).padStart(2, '0')}`;
 }
 
+// Tid för exit-animationen i CSS (.penalty-box.is-removing keyframe).
+// Hellre setTimeout än animationend – samma anledning som penalty-rad i
+// kontrollpanelen: max-height/border-width från auto → 0 är non-animatable
+// så animationend kan aldrig fyra och boxen fastnar i DOM med .is-removing.
+const PENALTY_BOX_EXIT_MS = 340;
+
 /**
  * Diff-rendering: skapa nya rutor med entry-animation, uppdatera tiden på
  * befintliga, och animera ut rutor som inte längre finns i state innan de
@@ -506,7 +559,7 @@ function renderPenaltyStack(containerEl, penalties) {
     if (box.classList.contains('is-removing')) return;
     if (!incomingIds.has(box.dataset.id)) {
       box.classList.add('is-removing');
-      box.addEventListener('animationend', () => box.remove(), { once: true });
+      setTimeout(() => box.remove(), PENALTY_BOX_EXIT_MS);
     }
   });
 
@@ -615,6 +668,19 @@ function renderPreGameStats(data) {
 // SOCKET-LYSSNARE
 // ════════════════════════════════════════════════════════════════════════════
 
+// Memo-cache: stateUpdate skickas på varje score-/klock-/period-ändring,
+// vilket annars skulle re-render:a hela lineup-/tabell-/fixtures-listorna i
+// onödan – och tända om kaskad-animationer mitt under visning. Vi cachar
+// senast renderade payload som JSON-sträng (datan är liten, ~enstaka kB,
+// så stringify-overheaden är försumbar mot DOM-rebuild).
+let lastLineupHomeJson = '';
+let lastLineupAwayJson = '';
+let lastLineupHomeLeadersJson = '';
+let lastLineupAwayLeadersJson = '';
+let lastTableJson = '';
+let lastFixturesJson = '';
+let lastPreGameStatsJson = '';
+
 /** Fullständigt state – vid anslutning och dataf-uppdateringar */
 socket.on('stateUpdate', (state) => {
   // Poängtavla
@@ -634,16 +700,34 @@ socket.on('stateUpdate', (state) => {
   const p = state.period || 1;
   elPeriod.textContent = p <= 3 ? `Period ${p}` : p === 4 ? 'Övertid' : 'Straffar';
 
-  // Uppställningar & tabell – uppdatera data, rör inte synligheten
+  // Uppställningar & tabell – uppdatera data, rör inte synligheten. Kör
+  // bara render om datan faktiskt ändrats sen förra stateUpdate (annars
+  // skulle ett vanligt mål re-render:a hela hemmalineupen).
   elLineupHomeTitle.textContent = state.teamA;
   elLineupAwayTitle.textContent = state.teamB;
-  renderLineup(elLineupHomeGrid, state.lineupHome || []);
-  renderLineup(elLineupAwayGrid, state.lineupAway || []);
-  renderTable(state.table || []);
+  const lineupHomeJson = JSON.stringify(state.lineupHome || []);
+  if (lineupHomeJson !== lastLineupHomeJson) {
+    renderLineup(elLineupHomeGrid, state.lineupHome || []);
+    lastLineupHomeJson = lineupHomeJson;
+  }
+  const lineupAwayJson = JSON.stringify(state.lineupAway || []);
+  if (lineupAwayJson !== lastLineupAwayJson) {
+    renderLineup(elLineupAwayGrid, state.lineupAway || []);
+    lastLineupAwayJson = lineupAwayJson;
+  }
+  const tableJson = JSON.stringify(state.table || []);
+  if (tableJson !== lastTableJson) {
+    renderTable(state.table || []);
+    lastTableJson = tableJson;
+  }
   elTableEyebrow.textContent = (state.tableName || 'INNEBANDY').toUpperCase();
 
   // Omgångens matcher
-  renderFixtures(state.fixtures || []);
+  const fixturesJson = JSON.stringify(state.fixtures || []);
+  if (fixturesJson !== lastFixturesJson) {
+    renderFixtures(state.fixtures || []);
+    lastFixturesJson = fixturesJson;
+  }
   elFixturesTitle.textContent = state.fixturesTitle || 'Spelprogram';
 
   // Klock-visibility (default = true om fältet saknas i äldre state)
@@ -684,16 +768,28 @@ socket.on('stateUpdate', (state) => {
   // både number och string så det är robust mot framtida förändringar.
   elIntermissionWaiting.textContent = computeNextPeriodLabel(state.period);
 
-  // Ledare för uppställningarna
-  renderLeaders(elLineupHomeLeadersList, state.lineupHomeLeaders || []);
-  renderLeaders(elLineupAwayLeadersList, state.lineupAwayLeaders || []);
+  // Ledare för uppställningarna – bara re-render om datan ändrats
+  const homeLeadersJson = JSON.stringify(state.lineupHomeLeaders || []);
+  if (homeLeadersJson !== lastLineupHomeLeadersJson) {
+    renderLeaders(elLineupHomeLeadersList, state.lineupHomeLeaders || []);
+    lastLineupHomeLeadersJson = homeLeadersJson;
+  }
+  const awayLeadersJson = JSON.stringify(state.lineupAwayLeaders || []);
+  if (awayLeadersJson !== lastLineupAwayLeadersJson) {
+    renderLeaders(elLineupAwayLeadersList, state.lineupAwayLeaders || []);
+    lastLineupAwayLeadersJson = awayLeadersJson;
+  }
 
   // Spelar-/ledar-lower-third
   renderPlayerLowerThird(state.playerLowerThird);
 
-  // Statistik inför match – hydrera DOM. Skylten visas/döljs via
-  // switchTo()/graphicState så vi rör inte synligheten här.
-  renderPreGameStats(state.preGameStats || null);
+  // Statistik inför match – hydrera DOM bara när den ändrats. Skylten
+  // visas/döljs via switchTo()/graphicState så vi rör inte synligheten här.
+  const preGameJson = JSON.stringify(state.preGameStats || null);
+  if (preGameJson !== lastPreGameStatsJson) {
+    renderPreGameStats(state.preGameStats || null);
+    lastPreGameStatsJson = preGameJson;
+  }
 
   // Utvisningar – hydrera från full state vid connect/reload, sen sköter
   // penaltiesUpdate sekund-för-sekund-tickande utan att rebuild:a DOM.
@@ -714,6 +810,7 @@ socket.on('clockStatus', ({ running }) => { elClock.classList.toggle('running', 
  */
 socket.on('graphicState', ({ activeGraphic }) => {
   transitioning = false;
+  pendingTarget = null;
   activeKey     = activeGraphic;
 
   // Sätt alla element till rätt state direkt – respekterar overlays
