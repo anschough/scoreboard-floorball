@@ -66,6 +66,10 @@ const previewIbHomeCount     = document.getElementById('previewIbHomeCount');
 const previewIbAwayCount     = document.getElementById('previewIbAwayCount');
 const btnSendIbHome          = document.getElementById('btnSendIbHome');
 const btnSendIbAway          = document.getElementById('btnSendIbAway');
+const previewIbHomeLeadersWrap = document.getElementById('previewIbHomeLeadersWrap');
+const previewIbAwayLeadersWrap = document.getElementById('previewIbAwayLeadersWrap');
+const previewIbHomeLeadersList = document.getElementById('previewIbHomeLeadersList');
+const previewIbAwayLeadersList = document.getElementById('previewIbAwayLeadersList');
 
 // Flik 3 – Tabell-förhandsvisning (fylls av kombinerad fetch)
 const previewInnebandyTable      = document.getElementById('previewInnebandyTable');
@@ -85,9 +89,11 @@ const btnSendFixtures      = document.getElementById('btnSendFixtures');
 // LOKAL STATE – skrapad data som väntar på att skickas live
 // ════════════════════════════════════════════════════════════════════════════
 let pendingInnebandyTable = { name: '', rows: [] };
-let pendingIbHome         = { name: '', players: [] };
-let pendingIbAway         = { name: '', players: [] };
+let pendingIbHome         = { name: '', players: [], leaders: [] };
+let pendingIbAway         = { name: '', players: [], leaders: [] };
 let pendingFixtures       = { title: '', fixtures: [] };
+// Senast valda spelar-/ledar-skylt – för visuell highlight + toggle
+let activeLowerThirdKey = '';
 
 // Läsbar etikett för varje grafik-nyckel
 const GRAPHIC_LABELS = {
@@ -99,6 +105,7 @@ const GRAPHIC_LABELS = {
   commentators: 'Kommentatorer (lower-third)',
   matchup:      'Inför/Paus (Matchup)',
   intermission: 'Pausvila',
+  playerLowerThird: 'Spelar-/Ledar-skylt',
   none:         'Ingen grafik visas'
 };
 
@@ -413,12 +420,15 @@ btnResetMatch.addEventListener('click', () => {
 // Lyssna på reset-event från servern: rensa lokala previews + pending state
 socket.on('matchStateReset', () => {
   pendingInnebandyTable = { name: '', rows: [] };
-  pendingIbHome         = { name: '', players: [] };
-  pendingIbAway         = { name: '', players: [] };
+  pendingIbHome         = { name: '', players: [], leaders: [] };
+  pendingIbAway         = { name: '', players: [], leaders: [] };
   pendingFixtures       = { title: '', fixtures: [] };
+  activeLowerThirdKey   = '';
   previewInnebandyLineup.hidden = true;
   previewInnebandyTable.hidden  = true;
   previewFixtures.hidden        = true;
+  previewIbHomeLeadersWrap.hidden = true;
+  previewIbAwayLeadersWrap.hidden = true;
   if (fetchStatusAll) setStatus(fetchStatusAll, '');
   if (urlMatchAll) urlMatchAll.value = '';
   try { localStorage.removeItem(LS_URL_KEY); } catch (_) {}
@@ -434,26 +444,74 @@ function setStatus(el, text, type = '') {
   el.className    = `fetch-status${type ? ` ${type}` : ''}`;
 }
 
-/**
- * Renderar en lista med spelare i ett preview-element.
- * Extraherar tröjnummer om raden börjar med siffra.
- */
-function renderPreviewPlayers(containerEl, players) {
+/** Sätt om det är klickbart från context (team + teamName) */
+function renderPreviewPlayers(containerEl, players, ctx) {
   containerEl.innerHTML = '';
+  const clickable = !!(ctx && ctx.team);
   players.forEach(player => {
     const div   = document.createElement('div');
-    div.className = 'preview-player';
+    div.className = 'preview-player' + (clickable ? ' is-clickable' : '');
 
     const parts  = player.trim().split(/\s+/);
     const hasNum = parts.length > 1 && /^\d+$/.test(parts[0]);
 
+    let number = '';
+    let name   = player;
     if (hasNum) {
-      const num = parts.shift();
-      div.innerHTML = `<span class="preview-player-num">${num}</span>${parts.join(' ')}`;
+      number = parts.shift();
+      name   = parts.join(' ');
+      div.innerHTML = `<span class="preview-player-num">${number}</span>${name}`;
     } else {
       div.textContent = player;
     }
+
+    if (clickable) {
+      div.dataset.team     = ctx.team;
+      div.dataset.teamName = ctx.teamName || '';
+      div.dataset.number   = number;
+      div.dataset.name     = name;
+      div.dataset.role     = '';
+      div.dataset.ltKey    = `${ctx.team}|p|${number}|${name}`;
+      div.title = `Klicka för att visa skylt: ${number ? `#${number} ` : ''}${name}`;
+    }
     containerEl.appendChild(div);
+  });
+  applyActiveLowerThirdHighlight();
+}
+
+/** Renderar ledare/staff under spelarlistan (samma look + klickbarhet). */
+function renderPreviewLeaders(wrapEl, listEl, leaders, ctx) {
+  listEl.innerHTML = '';
+  if (!leaders || !leaders.length) {
+    wrapEl.hidden = true;
+    return;
+  }
+  wrapEl.hidden = false;
+  const clickable = !!(ctx && ctx.team);
+  leaders.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'preview-player' + (clickable ? ' is-clickable' : '');
+    const role = (l.role || '').trim();
+    const name = (l.name || '').trim();
+    div.innerHTML = `<span class="preview-player-role">${role}</span>${name}`;
+    if (clickable) {
+      div.dataset.team     = ctx.team;
+      div.dataset.teamName = ctx.teamName || '';
+      div.dataset.number   = '';
+      div.dataset.name     = name;
+      div.dataset.role     = role;
+      div.dataset.ltKey    = `${ctx.team}|l|${role}|${name}`;
+      div.title = `Klicka för att visa skylt: ${role ? `${role} – ` : ''}${name}`;
+    }
+    listEl.appendChild(div);
+  });
+  applyActiveLowerThirdHighlight();
+}
+
+/** Markerar den rad som motsvarar nuvarande aktiva lower-third. */
+function applyActiveLowerThirdHighlight() {
+  document.querySelectorAll('.preview-player.is-clickable').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.ltKey === activeLowerThirdKey);
   });
 }
 
@@ -530,18 +588,42 @@ if (savedUrl && urlMatchAll && !urlMatchAll.value) {
 // Fyller previews från ett stateUpdate-objekt. Idempotent – körs vid varje
 // stateUpdate utan att skada pågående interaktion.
 function hydratePreviewsFromState(state) {
+  // Speglar serverns aktiva lower-third så vi kan highlight:a rätt rad
+  if (state.playerLowerThird && state.playerLowerThird.name) {
+    const lt = state.playerLowerThird;
+    const kind = lt.number ? 'p' : 'l';
+    const tag  = lt.number || lt.role || '';
+    activeLowerThirdKey = `${lt.team}|${kind}|${tag}|${lt.name}`;
+  } else {
+    activeLowerThirdKey = '';
+  }
+
   if (state.lineupHome?.length) {
-    pendingIbHome = { name: state.teamA, players: state.lineupHome };
+    pendingIbHome = {
+      name:    state.teamA,
+      players: state.lineupHome,
+      leaders: state.lineupHomeLeaders || []
+    };
     previewIbHomeName.textContent  = state.teamA;
     previewIbHomeCount.textContent = `${state.lineupHome.length} spelare`;
-    renderPreviewPlayers(previewIbHomeList, state.lineupHome);
+    renderPreviewPlayers(previewIbHomeList, state.lineupHome,
+      { team: 'home', teamName: state.teamA });
+    renderPreviewLeaders(previewIbHomeLeadersWrap, previewIbHomeLeadersList,
+      state.lineupHomeLeaders || [], { team: 'home', teamName: state.teamA });
     previewInnebandyLineup.hidden = false;
   }
   if (state.lineupAway?.length) {
-    pendingIbAway = { name: state.teamB, players: state.lineupAway };
+    pendingIbAway = {
+      name:    state.teamB,
+      players: state.lineupAway,
+      leaders: state.lineupAwayLeaders || []
+    };
     previewIbAwayName.textContent  = state.teamB;
     previewIbAwayCount.textContent = `${state.lineupAway.length} spelare`;
-    renderPreviewPlayers(previewIbAwayList, state.lineupAway);
+    renderPreviewPlayers(previewIbAwayList, state.lineupAway,
+      { team: 'away', teamName: state.teamB });
+    renderPreviewLeaders(previewIbAwayLeadersWrap, previewIbAwayLeadersList,
+      state.lineupAwayLeaders || [], { team: 'away', teamName: state.teamB });
     previewInnebandyLineup.hidden = false;
   }
   if (state.table?.length) {
@@ -560,6 +642,7 @@ function hydratePreviewsFromState(state) {
       : `${state.fixtures.length} matcher`;
     previewFixtures.hidden = false;
   }
+  applyActiveLowerThirdHighlight();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -635,15 +718,29 @@ socket.on('fetch_result_innebandy_all_data', (data) => {
   }
 
   // ── 2. Uppställningar → båda previews ──────────────────────────────────
-  pendingIbHome = { name: match.homeTeam || '', players: match.homeRoster || [] };
-  pendingIbAway = { name: match.awayTeam || '', players: match.awayRoster || [] };
+  pendingIbHome = {
+    name:    match.homeTeam || '',
+    players: match.homeRoster || [],
+    leaders: match.homeLeaders || []
+  };
+  pendingIbAway = {
+    name:    match.awayTeam || '',
+    players: match.awayRoster || [],
+    leaders: match.awayLeaders || []
+  };
 
   previewIbHomeName.textContent  = match.homeTeam || '';
   previewIbAwayName.textContent  = match.awayTeam || '';
   previewIbHomeCount.textContent = `${match.homeRoster.length} spelare`;
   previewIbAwayCount.textContent = `${match.awayRoster.length} spelare`;
-  renderPreviewPlayers(previewIbHomeList, match.homeRoster);
-  renderPreviewPlayers(previewIbAwayList, match.awayRoster);
+  renderPreviewPlayers(previewIbHomeList, match.homeRoster,
+    { team: 'home', teamName: match.homeTeam || '' });
+  renderPreviewPlayers(previewIbAwayList, match.awayRoster,
+    { team: 'away', teamName: match.awayTeam || '' });
+  renderPreviewLeaders(previewIbHomeLeadersWrap, previewIbHomeLeadersList,
+    match.homeLeaders || [], { team: 'home', teamName: match.homeTeam || '' });
+  renderPreviewLeaders(previewIbAwayLeadersWrap, previewIbAwayLeadersList,
+    match.awayLeaders || [], { team: 'away', teamName: match.awayTeam || '' });
   previewInnebandyLineup.hidden = false;
 
   // ── 3. Tabell → preview (om hämtad, annars bara matchen) ───────────────
@@ -695,6 +792,35 @@ btnSendIbAway.addEventListener('click', () => {
   if (!pendingIbAway.players.length) return;
   socket.emit('updateLineups', { home: null, away: pendingIbAway.players });
   socket.emit('switchGraphic', { to: 'lineupAway' });
+});
+
+// ── Klickbar lineup-rad → spelar-/ledar-lower-third ──────────────────────
+// Klick på samma rad igen släcker skylten (toggle). Klick på en annan rad
+// byter direkt till den nya personen utan att gå via "dölj".
+[previewIbHomeList, previewIbAwayList,
+ previewIbHomeLeadersList, previewIbAwayLeadersList].forEach(list => {
+  list.addEventListener('click', (e) => {
+    const row = e.target.closest('.preview-player.is-clickable');
+    if (!row) return;
+    const key = row.dataset.ltKey || '';
+    if (key && key === activeLowerThirdKey) {
+      // Toggle av: släck skylten utan att visa scoreboarden efteråt
+      activeLowerThirdKey = '';
+      socket.emit('updatePlayerLowerThird', null);
+      socket.emit('switchGraphic', { to: 'none' });
+    } else {
+      activeLowerThirdKey = key;
+      socket.emit('updatePlayerLowerThird', {
+        team:     row.dataset.team,
+        teamName: row.dataset.teamName,
+        number:   row.dataset.number,
+        name:     row.dataset.name,
+        role:     row.dataset.role
+      });
+      socket.emit('switchGraphic', { to: 'playerLowerThird' });
+    }
+    applyActiveLowerThirdHighlight();
+  });
 });
 
 btnSendInnebandyTable.addEventListener('click', () => {

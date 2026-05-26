@@ -43,6 +43,10 @@ let matchState = {
   homeLogo: '',
   awayLogo: '',
   matchStart: '',        // ISO datetime, t.ex. "2026-03-15T16:00:00"
+  // Spelare-/ledar-skylt (lower-third nere till vänster). Sätts via klick
+  // i kontrollpanelens lineup-lista. null = ingen aktiv skylt.
+  //   { team: 'home'|'away', teamName, number, name, role }
+  playerLowerThird: null,
   // Utvisningar – synkade med matchklockan. Varje objekt:
   //   { id: number, duration: number, remaining: number, jersey?: string }
   // duration + remaining anges i sekunder. När remaining når 0 tas
@@ -172,6 +176,7 @@ function resetMatchState() {
     homeLogo: '',
     awayLogo: '',
     matchStart: '',
+    playerLowerThird: null,
     penaltiesHome: [],
     penaltiesAway: []
   };
@@ -584,6 +589,27 @@ io.on('connection', (socket) => {
     io.emit('stateUpdate', matchState);
   });
 
+  // Spelar-/ledar-lower-third (lower-third nere till vänster).
+  // Payload kan vara null/{} för att rensa skylten, annars
+  //   { team: 'home'|'away', teamName, number, name, role }
+  safeOn(socket, 'updatePlayerLowerThird', (payload) => {
+    if (payload == null) {
+      matchState.playerLowerThird = null;
+    } else {
+      const team      = payload.team === 'away' ? 'away' : 'home';
+      const teamName  = typeof payload.teamName === 'string' ? payload.teamName.trim() : '';
+      const number    = typeof payload.number   === 'string' ? payload.number.trim()   : '';
+      const name      = typeof payload.name     === 'string' ? payload.name.trim()     : '';
+      const role      = typeof payload.role     === 'string' ? payload.role.trim()     : '';
+      if (!name) {
+        matchState.playerLowerThird = null;
+      } else {
+        matchState.playerLowerThird = { team, teamName, number, name, role };
+      }
+    }
+    io.emit('stateUpdate', matchState);
+  });
+
   // Kommentatorer (lower-third)
   safeOn(socket, 'updateCommentators', ({ name1, name2 } = {}) => {
     matchState.commentators = {
@@ -623,7 +649,7 @@ io.on('connection', (socket) => {
     // beteende som HTTP-rutten /api/graphic/clear.
     const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
-                     'commentators', 'matchup', 'intermission', 'none'];
+                     'commentators', 'matchup', 'intermission', 'playerLowerThird', 'none'];
     if (!allowed.includes(target)) return;
     graphicState.activeGraphic = target;
     io.emit('switchGraphic', { to: target });
@@ -828,7 +854,10 @@ app.get('/api/clock/toggle_visibility', (_req, res) => {
 // Smidigt för Stream Deck – en knapp gör båda.
 app.get('/api/graphic/commentators/toggle', (_req, res) => {
   const currently = graphicState.activeGraphic;
-  const target    = currently === 'commentators' ? 'scoreboard' : 'commentators';
+  // Av-toggle landar på 'none' så ingen annan grafik dyker upp automatiskt
+  // (tidigare hoppade vi tillbaka till scoreboarden, vilket inte är önskvärt
+  // när kommentator-skylten är en ren overlay som ska tas bort tyst).
+  const target    = currently === 'commentators' ? 'none' : 'commentators';
 
   graphicState.activeGraphic = target;
   io.emit('switchGraphic', { to: target });

@@ -36,6 +36,13 @@ const elMatchupCompetition = document.getElementById('matchupCompetition');
 const elLineupHomeLeadersList = document.getElementById('lineupHomeLeaders');
 const elLineupAwayLeadersList = document.getElementById('lineupAwayLeaders');
 
+// Spelar-/ledar-skylt (lower-third nere till vänster)
+const elPlayerLt     = document.getElementById('player-lowerthird');
+const elPlayerLtTeam = document.getElementById('playerLtTeam');
+const elPlayerLtNum  = document.getElementById('playerLtNum');
+const elPlayerLtRole = document.getElementById('playerLtRole');
+const elPlayerLtName = document.getElementById('playerLtName');
+
 // Utvisningar (penalties)
 const elPenaltiesHome = document.getElementById('penalties-home');
 const elPenaltiesAway = document.getElementById('penalties-away');
@@ -56,7 +63,8 @@ const graphicElements = {
   fixtures:     elFixturesGraphic,
   commentators: elCommentators,
   matchup:      elMatchup,
-  intermission: elIntermission
+  intermission: elIntermission,
+  playerLowerThird: elPlayerLt
 };
 
 // Grafiker som tillåter scoreboarden att stå kvar (lower-third overlays).
@@ -350,6 +358,27 @@ function renderLeaders(containerEl, leaders) {
   }
 }
 
+/**
+ * Renderar spelar-/ledar-lower-third. Visar lagnamn som rubrik, sen
+ * antingen tröjnummer + namn (spelare) eller namn + roll under (ledare).
+ *
+ * När data === null gör vi MEDVETET ingenting med innehållet. Annars
+ * skulle texten nollas innan exit-animationen hinner köra och OBS
+ * skulle visa en tom box i ~580 ms. Synligheten styrs av .visible-
+ * klassen via switchTo() – när panelen blir osynlig spelar det ingen
+ * roll att den gamla texten fortfarande ligger i DOM:en, och nästa
+ * gång panelen aktiveras får den färsk data innan den fadar in.
+ */
+function renderPlayerLowerThird(data) {
+  if (!elPlayerLt || !data) return;
+  elPlayerLtTeam.textContent = (data.teamName || '').toUpperCase();
+  elPlayerLtNum.textContent  = data.number || '';
+  elPlayerLtRole.textContent = (data.role || '').toUpperCase();
+  elPlayerLtName.textContent = data.name || '';
+  elPlayerLt.classList.toggle('has-number', !!data.number);
+  elPlayerLt.classList.toggle('has-role',   !data.number && !!data.role);
+}
+
 /** Formaterar matchtid till "FRE 15/3" + "16:00" för fixtures-listan */
 function formatFixtureTime(iso) {
   if (!iso) return { date: '', time: '' };
@@ -572,6 +601,9 @@ socket.on('stateUpdate', (state) => {
   // Ledare för uppställningarna
   renderLeaders(elLineupHomeLeadersList, state.lineupHomeLeaders || []);
   renderLeaders(elLineupAwayLeadersList, state.lineupAwayLeaders || []);
+
+  // Spelar-/ledar-lower-third
+  renderPlayerLowerThird(state.playerLowerThird);
 
   // Utvisningar – hydrera från full state vid connect/reload, sen sköter
   // penaltiesUpdate sekund-för-sekund-tickande utan att rebuild:a DOM.
