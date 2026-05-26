@@ -310,6 +310,17 @@ function formatPlayers(apiPlayers) {
     .map(p => `${p.ShirtNo} ${p.Name}`.trim());
 }
 
+// Normaliserar IBIS' rollnamn till det vi vill visa i grafiken.
+// "Lagankuten" är IBIS' interna rollnamn för icke-tränar-staff – vi visar
+// det som "Ledare" för att matcha sektionsrubriken och hålla en
+// konsekvent terminologi mot tittarna.
+function normalizeRoleName(role) {
+  if (!role) return '';
+  const trimmed = String(role).trim();
+  if (/^lagankut/i.test(trimmed)) return 'Ledare';
+  return trimmed;
+}
+
 // Formaterar ledare/staff till { name, role }. Sorterar tränare först.
 function formatPersons(apiPersons) {
   const roleWeight = (r) => /tränare|huvudtränare/i.test(r) ? 0 : 1;
@@ -318,7 +329,7 @@ function formatPersons(apiPersons) {
       const w = roleWeight(a.RoleName || '') - roleWeight(b.RoleName || '');
       return w !== 0 ? w : (a.Name || '').localeCompare(b.Name || '', 'sv');
     })
-    .map(p => ({ name: p.Name || '', role: p.RoleName || '' }));
+    .map(p => ({ name: p.Name || '', role: normalizeRoleName(p.RoleName) }));
 }
 
 // Hämtar uppställningar för en match-URL.
@@ -776,11 +787,18 @@ io.on('connection', (socket) => {
   });
 
   // ── Laguppställningar & Tabell (data-uppdateringar) ──────────────────────
+  // Ledare som kommer via socket (i normalfallet via fetch → formatPersons,
+  // som redan normaliserar) – kör ändå normalizeRoleName som defensivt skydd
+  // om en framtida integration skickar in raw IBIS-RoleName direkt.
+  const normalizeLeaders = (arr) => arr.map(l => ({
+    name: typeof l?.name === 'string' ? l.name : '',
+    role: normalizeRoleName(typeof l?.role === 'string' ? l.role : '')
+  }));
   safeOn(socket, 'updateLineups', ({ home, away, homeLeaders, awayLeaders } = {}) => {
     if (Array.isArray(home))         matchState.lineupHome        = home;
     if (Array.isArray(away))         matchState.lineupAway        = away;
-    if (Array.isArray(homeLeaders))  matchState.lineupHomeLeaders = homeLeaders;
-    if (Array.isArray(awayLeaders))  matchState.lineupAwayLeaders = awayLeaders;
+    if (Array.isArray(homeLeaders))  matchState.lineupHomeLeaders = normalizeLeaders(homeLeaders);
+    if (Array.isArray(awayLeaders))  matchState.lineupAwayLeaders = normalizeLeaders(awayLeaders);
     io.emit('stateUpdate', matchState);
   });
 
