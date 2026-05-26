@@ -17,12 +17,16 @@ Matchdata (lag, tabell, spelprogram) hämtas automatiskt från **stats.innebandy
 
 ## Funktioner
 
-- Scoreboard med klocka, period, poäng och lagloggor
-- Lineup för hemma- och bortalag (inkl. ledare)
-- Live serietabell
-- Kommande matcher / spelprogram
-- Kommentatorer
-- Periodpaus-grafik
+- **Scoreboard** med klocka, period, poäng och lagloggor
+- **Utvisningar** synkade med matchklockan (2 min, 2+2 min, 5 min – max 2 aktiva per lag)
+- **Time-out** med 30 sekunders nedräkning, dockad direkt under scoreboarden
+- **Lineup** för hemma- och bortalag (inkl. ledare/tränare)
+- **Live serietabell** och **kommande matcher**
+- **Matchup** och **statistik inför match**
+- **Spelar- och ledarskylt** (lower-third)
+- **Kommentator-skylt**
+- **Pausvila**
+- **Sponsorremsa** som rullar längst ner under matchup/pausvila (upp till 15 logotyper, hanteras via settings-sidan)
 - Allt uppdateras direkt via WebSockets
 
 ## Kom igång
@@ -43,14 +47,18 @@ När servern är igång öppnar du:
 |------|-----|------------|
 | Kontrollpanel | http://localhost:3000/control.html | Öppna i webbläsare under sändning |
 | Grafik-overlay | http://localhost:3000/graphics.html | Lägg in som **Browser Source** i OBS |
-| API-dokumentation | http://localhost:3000/api-docs.html | Översikt över alla endpoints |
+| Inställningar | http://localhost:3000/settings.html | Hantera sponsorlogotyper |
+| API-dokumentation | http://localhost:3000/api-docs.html | Översikt över alla endpoints (för Stream Deck m.m.) |
+
+Servern lyssnar på port 3000 som default. Kör med `PORT=4000 npm start` för att byta port, eller `HOST=127.0.0.1 npm start` för att bara lyssna lokalt.
 
 ## Teknik
 
-- **Node.js** + **Express** (server)
+- **Node.js 18+** + **Express** (server)
 - **Socket.IO** (realtidsuppdateringar)
-- **Axios** + **Cheerio** (hämta data från innebandy.se)
+- **Axios** (hämtar JSON från stats.innebandy.se)
 - Vanlig HTML/CSS/JS i frontend (inget bygg-steg)
+- Sponsorlogotyper sparas under `public/sponsors/` med metadata i `data/sponsors.json`
 
 ## Licens
 

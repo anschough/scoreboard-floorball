@@ -63,6 +63,18 @@ const elIntermissionHomeLogo = document.getElementById('intermissionHomeLogo');
 const elIntermissionAwayLogo = document.getElementById('intermissionAwayLogo');
 const elIntermissionWaiting  = document.getElementById('intermissionWaiting');
 
+// Time-out (pill dockad under scoreboarden)
+const elTimeOut       = document.getElementById('timeout-graphic');
+const elTimeOutName   = document.getElementById('timeoutTeamName');
+
+// Sponsor-strip (rullande logos längst ner)
+const elSponsorStrip = document.getElementById('sponsor-strip');
+const elSponsorTrack = document.getElementById('sponsorTrack');
+
+// Grafiker där sponsor-stripen alltid ska visas längst ner.
+// Time-out är medvetet INTE med – stripen ska INTE synas vid time-out.
+const SPONSOR_GRAPHICS = new Set(['matchup', 'intermission']);
+
 // Karta: state-nyckel → DOM-element
 const graphicElements = {
   lineupHome:   elLineupHome,
@@ -73,12 +85,15 @@ const graphicElements = {
   matchup:      elMatchup,
   intermission: elIntermission,
   playerLowerThird: elPlayerLt,
-  preGameStats: elPreGame
+  preGameStats: elPreGame,
+  timeout:      elTimeOut
 };
 
 // Grafiker som tillåter scoreboarden att stå kvar (lower-third overlays).
 // Kommentator-skylten visas numera på egen hand och är därför INTE en overlay.
-const SCOREBOARD_OVERLAYS = new Set();
+// Time-out är dockad direkt under scoreboarden så scoreboarden måste vara
+// kvar för att skylten ska sitta på rätt plats.
+const SCOREBOARD_OVERLAYS = new Set(['timeout']);
 const shouldShowScoreboard = (g) => g === 'scoreboard' || SCOREBOARD_OVERLAYS.has(g);
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -147,6 +162,9 @@ function switchTo(targetKey) {
   if (wasScoreboardShown && !willScoreboardShow) {
     setVisible('scoreboard', false);
   }
+  // Sponsor-strip följer matchup/intermission – synk på samma slag som
+  // resten av exit:en så den glider ner när vi byter bort.
+  applySponsorStripVisibility(targetKey);
 
   // Steg 2 – Visa nästa grafik efter att ut-animationen är klar
   setTimeout(() => {
@@ -549,21 +567,34 @@ const PENALTY_BOX_EXIT_MS = 340;
  * Diff-rendering: skapa nya rutor med entry-animation, uppdatera tiden på
  * befintliga, och animera ut rutor som inte längre finns i state innan de
  * tas bort. Sparar DOM-flicker när tiden tickar sekund för sekund.
+ *
+ * Poster med samma pairId (2+2-utvisning) wrappas i en .penalty-pair
+ * (flex-row) så de visas sida vid sida istället för staplade i kolumnen.
  */
 function renderPenaltyStack(containerEl, penalties) {
   if (!containerEl) return;
   const incomingIds = new Set(penalties.map(p => String(p.id)));
 
-  // Animera ut element som inte längre är med
-  Array.from(containerEl.children).forEach(box => {
+  // Animera ut boxar som inte längre är med. Söker rekursivt så vi även
+  // fångar boxar inne i .penalty-pair-wrappers.
+  Array.from(containerEl.querySelectorAll('.penalty-box')).forEach(box => {
     if (box.classList.contains('is-removing')) return;
     if (!incomingIds.has(box.dataset.id)) {
       box.classList.add('is-removing');
-      setTimeout(() => box.remove(), PENALTY_BOX_EXIT_MS);
+      setTimeout(() => {
+        const parentPair = box.parentElement?.classList.contains('penalty-pair')
+          ? box.parentElement : null;
+        box.remove();
+        // Töm pair-wrapper när sista boxen försvunnit
+        if (parentPair && !parentPair.querySelector('.penalty-box')) {
+          parentPair.remove();
+        }
+      }, PENALTY_BOX_EXIT_MS);
     }
   });
 
-  // Skapa eller uppdatera kvarvarande
+  // Skapa eller uppdatera kvarvarande. Pair-medlemmar läggs i en delad
+  // .penalty-pair-wrapper (skapas första gången vi ser pairId:t).
   penalties.forEach(p => {
     let box = containerEl.querySelector(
       `.penalty-box[data-id="${p.id}"]:not(.is-removing)`
@@ -575,13 +606,36 @@ function renderPenaltyStack(containerEl, penalties) {
       box.innerHTML = `
         <span class="penalty-label">UTVISNING</span>
         <span class="penalty-time"></span>`;
-      containerEl.appendChild(box);
     }
+
+    // Hitta önskad förälder: pair-wrapper om pairId finns, annars containern
+    let desiredParent = containerEl;
+    if (p.pairId) {
+      let pair = containerEl.querySelector(
+        `.penalty-pair[data-pair-id="${CSS.escape(p.pairId)}"]`
+      );
+      if (!pair) {
+        pair = document.createElement('div');
+        pair.className = 'penalty-pair';
+        pair.dataset.pairId = p.pairId;
+        containerEl.appendChild(pair);
+      }
+      desiredParent = pair;
+    }
+    if (box.parentElement !== desiredParent) {
+      desiredParent.appendChild(box);
+    }
+
     box.querySelector('.penalty-time').textContent = formatPenaltyTime(p.remaining);
   });
 }
 
 function applyPenalties(home, away) {
+  // Grafiken visar både aktiva och köade utvisningar bredvid varandra.
+  // Köade poster har remaining === duration så deras box visar starttiden
+  // (t.ex. "2:00") och står stilla tills de promoteras till active – då
+  // börjar siffran ticka ner. Det matchar hur producenter brukar visa
+  // 2+2: två 2:00-rutor synliga, vänster räknar ner, höger väntar.
   renderPenaltyStack(elPenaltiesHome, home || []);
   renderPenaltyStack(elPenaltiesAway, away || []);
 }
@@ -683,6 +737,10 @@ let lastPreGameStatsJson = '';
 
 /** Fullständigt state – vid anslutning och dataf-uppdateringar */
 socket.on('stateUpdate', (state) => {
+  // Spara senaste state så timeOutUpdate-tickar har tillgång till lagnamn/logos
+  lastKnownState = state;
+  // Rendera time-out om det finns ett i state:t (initial hydration vid connect)
+  if (state.timeOut) renderTimeOut(state.timeOut, state);
   // Poängtavla
   const prevA = parseInt(elScoreA.textContent, 10);
   const prevB = parseInt(elScoreB.textContent, 10);
@@ -818,6 +876,70 @@ socket.on('graphicState', ({ activeGraphic }) => {
   Object.keys(graphicElements).forEach(key => {
     setVisible(key, key === activeGraphic);
   });
+  applySponsorStripVisibility(activeGraphic);
+});
+
+// ── Sponsor-strip ────────────────────────────────────────────────────────────
+// Lista av {id, url, name}. Render:as om bara när datan ändrats.
+let lastSponsorsJson = '';
+
+function renderSponsors(sponsors) {
+  if (!elSponsorTrack) return;
+  const json = JSON.stringify(sponsors || []);
+  if (json === lastSponsorsJson) return;
+  lastSponsorsJson = json;
+
+  elSponsorTrack.innerHTML = '';
+  if (!sponsors || !sponsors.length) return;
+
+  // Duplicera listan så translateX(-50%)-animationen kan loopa sömlöst.
+  // Andra halvan tar första halvans plats när cykeln är klar.
+  const cycle = [...sponsors, ...sponsors];
+  cycle.forEach(s => {
+    const img = document.createElement('img');
+    img.src = s.url;
+    img.alt = '';            // dekorativ – sponsor-namn är inget tittaren behöver
+    img.loading = 'lazy';
+    elSponsorTrack.appendChild(img);
+  });
+}
+
+function applySponsorStripVisibility(graphicKey) {
+  if (!elSponsorStrip) return;
+  // Visa bara om vi har minst en sponsor OCH aktiv grafik är i listan.
+  const hasSponsors = !!elSponsorTrack && elSponsorTrack.children.length > 0;
+  const show = hasSponsors && SPONSOR_GRAPHICS.has(graphicKey);
+  elSponsorStrip.classList.toggle('visible', show);
+  elSponsorStrip.setAttribute('aria-hidden', String(!show));
+  // Body-klass styr CSS-regel som puttar upp matchup/intermission så det
+  // blir luft mellan dem och sponsor-stripen.
+  document.body.classList.toggle('has-sponsor-strip', show);
+}
+
+socket.on('sponsorsUpdate', ({ sponsors } = {}) => {
+  renderSponsors(sponsors || []);
+  // Om en operatör laddar upp en första sponsor medan matchup är aktiv
+  // ska stripen poppa in direkt utan att kräva en grafik-växling.
+  applySponsorStripVisibility(activeKey);
+});
+
+// ── Time-out ─────────────────────────────────────────────────────────────────
+// Skylten är minimal: bara "TIME-OUT [LAGNAMN]". Servern auto-rensar
+// efter 30 sekunder så vi behöver bara hydrera lagnamnet när time-out
+// startas; sekund-tickarna ignoreras (vi visar ingen siffra).
+function renderTimeOut(timeOut, state) {
+  if (!elTimeOut || !timeOut) return;
+  const isHome = timeOut.team === 'home';
+  const teamName = (isHome ? state?.teamA : state?.teamB) || (isHome ? 'HEMMA' : 'BORTA');
+  elTimeOutName.textContent = teamName.toUpperCase();
+}
+
+// Senast kända state, så timeOutUpdate-tickar har tillgång till lagnamn/logos
+// utan att kräva en full stateUpdate på varje sekund.
+let lastKnownState = {};
+
+socket.on('timeOutUpdate', ({ timeOut } = {}) => {
+  renderTimeOut(timeOut, lastKnownState);
 });
 
 /**

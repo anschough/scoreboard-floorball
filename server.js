@@ -2,11 +2,17 @@ const express = require('express');
 const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
+const fs      = require('fs');
+const crypto  = require('crypto');
 const axios   = require('axios');
 
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
+
+// JSON-parser för sponsor-uppladdningar (data-URL:er på upp till ~5 MB/st × 10).
+// Sätts före static så att API-rutterna nedan kan läsa req.body.
+app.use(express.json({ limit: '60mb' }));
 
 // Statiska filer (control.html, graphics.html, css, js).
 // Dev-läge: ingen cache så att ändringar slår igenom direkt utan hard refresh.
@@ -56,7 +62,11 @@ let matchState = {
   // Statistik inför match (pregamestats + ppstatistics aggregerat).
   // null = ingen data hämtad än. När data finns: { home: {...}, away: {...} }
   // Se buildPreGameStats() för fältlistan.
-  preGameStats: null
+  preGameStats: null,
+  // Aktiv time-out. null = ingen pågående. När en startas:
+  //   { team: 'home'|'away', duration: 30, remaining: 30 }
+  // Tickas i realtid (oberoende av matchklockan) av timeOutInterval.
+  timeOut: null
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -68,6 +78,104 @@ let penaltySeq = 0;
 let graphicState = {
   activeGraphic: 'none'
 };
+
+// ── Sponsor-state ────────────────────────────────────────────────────────────
+// Sponsorer hanteras separat från matchState eftersom de bör persistera
+// mellan matcher och över serverstart. Filerna lagras i public/sponsors/ och
+// listan i data/sponsors.json. Max 15 logos.
+const SPONSORS_MAX        = 15;
+const SPONSORS_DIR        = path.join(__dirname, 'public', 'sponsors');
+const SPONSORS_DATA_DIR   = path.join(__dirname, 'data');
+const SPONSORS_MANIFEST   = path.join(SPONSORS_DATA_DIR, 'sponsors.json');
+const SPONSOR_MIME_EXT    = {
+  'image/png':  'png',
+  'image/jpeg': 'jpg',
+  'image/jpg':  'jpg',
+  'image/gif':  'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg'
+};
+
+let sponsorState = { sponsors: [] };  // [{ id, url, name }]
+
+function ensureSponsorDirs() {
+  if (!fs.existsSync(SPONSORS_DIR))      fs.mkdirSync(SPONSORS_DIR, { recursive: true });
+  if (!fs.existsSync(SPONSORS_DATA_DIR)) fs.mkdirSync(SPONSORS_DATA_DIR, { recursive: true });
+}
+
+function loadSponsors() {
+  ensureSponsorDirs();
+  if (!fs.existsSync(SPONSORS_MANIFEST)) return;
+  try {
+    const raw = fs.readFileSync(SPONSORS_MANIFEST, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.sponsors)) {
+      // Filtrera bort poster vars fil saknas (manuell rensning av public/sponsors/).
+      sponsorState.sponsors = parsed.sponsors
+        .filter(s => s && s.id && s.url)
+        .filter(s => {
+          const filePath = path.join(__dirname, 'public', s.url.replace(/^\//, ''));
+          return fs.existsSync(filePath);
+        });
+    }
+  } catch (err) {
+    console.error('[sponsors] kunde inte läsa manifest:', err.message);
+  }
+}
+
+function saveSponsorManifest() {
+  ensureSponsorDirs();
+  fs.writeFileSync(SPONSORS_MANIFEST, JSON.stringify(sponsorState, null, 2), 'utf8');
+}
+
+function broadcastSponsors() {
+  io.emit('sponsorsUpdate', sponsorState);
+}
+
+// Parsar en data-URL "data:image/png;base64,iVBORw0..." → { mime, buffer } eller null.
+function parseDataUrl(dataUrl) {
+  if (typeof dataUrl !== 'string') return null;
+  const m = dataUrl.match(/^data:([\w/+.-]+);base64,(.+)$/);
+  if (!m) return null;
+  const mime = m[1].toLowerCase();
+  if (!SPONSOR_MIME_EXT[mime]) return null;
+  try {
+    const buffer = Buffer.from(m[2], 'base64');
+    if (!buffer.length) return null;
+    return { mime, buffer };
+  } catch {
+    return null;
+  }
+}
+
+// Skriv en ny sponsorbild till disk och returnera { id, url, name }.
+function writeSponsorFile(parsed, originalName) {
+  const ext = SPONSOR_MIME_EXT[parsed.mime];
+  const id  = crypto.randomBytes(8).toString('hex');
+  const filename = `${id}.${ext}`;
+  const filePath = path.join(SPONSORS_DIR, filename);
+  fs.writeFileSync(filePath, parsed.buffer);
+  return {
+    id,
+    url:  `/sponsors/${filename}`,
+    name: (typeof originalName === 'string' && originalName.trim())
+            ? originalName.trim().slice(0, 80)
+            : ''
+  };
+}
+
+// Ta bort en sponsorfil från disk (best-effort, loggar fel).
+function deleteSponsorFile(url) {
+  if (!url) return;
+  const filePath = path.join(__dirname, 'public', url.replace(/^\//, ''));
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    console.error('[sponsors] kunde inte ta bort fil:', filePath, err.message);
+  }
+}
+
+loadSponsors();
 
 // Hjälpare – broadcasta hela matchState till alla anslutna klienter.
 const broadcastState = () => io.emit('stateUpdate', matchState);
@@ -96,22 +204,51 @@ function startClock() {
 }
 
 // ── Utvisningslogik ──────────────────────────────────────────────────────────
+// Modell: varje utvisning har status 'active' (tickar och syns i grafiken)
+// eller 'queued' (väntar tills en aktiv löper ut). Hård cap på totalen:
+// MAX_PENALTIES_PER_TEAM = 2 entries per lag (regeln 3-mot-5 som minst).
+// Det innebär t.ex. att 2+2 (som lägger 2 entries) bara går att lägga om
+// laget har 0 entries sedan tidigare. Försök därutöver avvisas.
+// MAX_ACTIVE_PENALTIES = 2 håller dessutom att max 2 tickar samtidigt –
+// relevant för 2+2 där andra halvan startar när första löper ut.
+//
 // Säker array-mutation: iterera BAKIFRÅN och splice. Då kan vi ta bort
 // element under iterationen utan att indexen skiftar – två utvisningar som
-// går ut på samma tick hanteras korrekt. broadcastIfChanged säkerställer att
-// vi bara pushar state när något faktiskt ändrats (annars varje sekund).
+// går ut på samma tick hanteras korrekt.
+const MAX_PENALTIES_PER_TEAM = 2;
+const MAX_ACTIVE_PENALTIES   = 2;
+
+function countActive(arr) {
+  let n = 0;
+  for (const p of arr) if (p.status === 'active') n++;
+  return n;
+}
+
+// Promota äldsta queued till active så länge det finns plats. Mutates arr.
+// Returnerar true om något ändrades så broadcast triggas.
+function promoteQueued(arr) {
+  let changed = false;
+  while (countActive(arr) < MAX_ACTIVE_PENALTIES) {
+    const next = arr.find(p => p.status === 'queued');
+    if (!next) break;
+    next.status    = 'active';
+    next.remaining = next.duration;  // queued-tid räknas inte med
+    changed = true;
+  }
+  return changed;
+}
+
 function tickPenaltyArray(arr) {
   let changed = false;
   for (let i = arr.length - 1; i >= 0; i--) {
-    arr[i].remaining -= 1;
-    if (arr[i].remaining <= 0) {
-      arr.splice(i, 1);
-      changed = true;
-    } else {
-      // remaining ändrades – broadcasta så grafiken kan rendera siffrorna.
-      changed = true;
-    }
+    const p = arr[i];
+    if (p.status !== 'active') continue;
+    p.remaining -= 1;
+    changed = true;
+    if (p.remaining <= 0) arr.splice(i, 1);
   }
+  // Fyll på från kön om en aktiv just löpte ut
+  if (promoteQueued(arr)) changed = true;
   return changed;
 }
 
@@ -155,6 +292,7 @@ function setClockSeconds(seconds) {
 // /venue/logos och växlar tillbaka till scoreboarden som default-grafik.
 function resetMatchState() {
   pauseClock();
+  stopTimeOut();
   elapsedSeconds = 0;
   matchState = {
     teamA: 'Lag A',
@@ -183,7 +321,8 @@ function resetMatchState() {
     playerLowerThird: null,
     penaltiesHome: [],
     penaltiesAway: [],
-    preGameStats: null
+    preGameStats: null,
+    timeOut: null
   };
   penaltySeq = 0;
   graphicState.activeGraphic = 'none';
@@ -192,6 +331,51 @@ function resetMatchState() {
   io.emit('clockStatus', { running: false });
   io.emit('matchStateReset');
   console.log('Matchdata nollställd');
+}
+
+// ── Time-out ─────────────────────────────────────────────────────────────────
+// IBF-regel: 30 sekunder realtid (inte matchklocka). Egen interval-loop så
+// den tickar även när matchklockan är pausad. Vid 0 → auto-clear + växla
+// tillbaka till scoreboarden så grafiken inte hänger kvar tom.
+const TIME_OUT_SECONDS = 30;
+let timeOutInterval = null;
+
+function broadcastTimeOut() {
+  io.emit('timeOutUpdate', { timeOut: matchState.timeOut });
+}
+
+function startTimeOut(team) {
+  const t = team === 'away' ? 'away' : team === 'home' ? 'home' : null;
+  if (!t) return null;
+  stopTimeOut();
+  matchState.timeOut = {
+    team:      t,
+    duration:  TIME_OUT_SECONDS,
+    remaining: TIME_OUT_SECONDS
+  };
+  broadcastTimeOut();
+  timeOutInterval = setInterval(() => {
+    if (!matchState.timeOut) { stopTimeOut(); return; }
+    matchState.timeOut.remaining -= 1;
+    if (matchState.timeOut.remaining <= 0) {
+      // Auto-avsluta: nolla state, broadcast, och hoppa tillbaka till
+      // scoreboarden så vi inte sitter med en tom time-out-skylt på skärmen.
+      stopTimeOut();
+      if (graphicState.activeGraphic === 'timeout') {
+        graphicState.activeGraphic = 'scoreboard';
+        io.emit('switchGraphic', { to: 'scoreboard' });
+      }
+    } else {
+      broadcastTimeOut();
+    }
+  }, 1000);
+  return matchState.timeOut;
+}
+
+function stopTimeOut() {
+  if (timeOutInterval) { clearInterval(timeOutInterval); timeOutInterval = null; }
+  matchState.timeOut = null;
+  broadcastTimeOut();
 }
 
 // ── Texthjälp ────────────────────────────────────────────────────────────────
@@ -310,6 +494,17 @@ function formatPlayers(apiPlayers) {
     .map(p => `${p.ShirtNo} ${p.Name}`.trim());
 }
 
+// Normaliserar IBIS' rollnamn till det vi vill visa i grafiken.
+// "Lagankuten" är IBIS' interna rollnamn för icke-tränar-staff – vi visar
+// det som "Ledare" för att matcha sektionsrubriken och hålla en
+// konsekvent terminologi mot tittarna.
+function normalizeRoleName(role) {
+  if (!role) return '';
+  const trimmed = String(role).trim();
+  if (/^lagankut/i.test(trimmed)) return 'Ledare';
+  return trimmed;
+}
+
 // Formaterar ledare/staff till { name, role }. Sorterar tränare först.
 function formatPersons(apiPersons) {
   const roleWeight = (r) => /tränare|huvudtränare/i.test(r) ? 0 : 1;
@@ -318,7 +513,7 @@ function formatPersons(apiPersons) {
       const w = roleWeight(a.RoleName || '') - roleWeight(b.RoleName || '');
       return w !== 0 ? w : (a.Name || '').localeCompare(b.Name || '', 'sv');
     })
-    .map(p => ({ name: p.Name || '', role: p.RoleName || '' }));
+    .map(p => ({ name: p.Name || '', role: normalizeRoleName(p.RoleName) }));
 }
 
 // Hämtar uppställningar för en match-URL.
@@ -712,6 +907,8 @@ io.on('connection', (socket) => {
   socket.emit('stateUpdate', matchState);
   socket.emit('graphicState', graphicState);
   socket.emit('clockStatus', { running: matchState.clockRunning });
+  socket.emit('sponsorsUpdate', sponsorState);
+  socket.emit('timeOutUpdate', { timeOut: matchState.timeOut });
 
   // ── Poängtavla ───────────────────────────────────────────────────────────
   safeOn(socket, 'updateNames', ({ teamA, teamB, teamAShort, teamBShort } = {}) => {
@@ -776,11 +973,18 @@ io.on('connection', (socket) => {
   });
 
   // ── Laguppställningar & Tabell (data-uppdateringar) ──────────────────────
+  // Ledare som kommer via socket (i normalfallet via fetch → formatPersons,
+  // som redan normaliserar) – kör ändå normalizeRoleName som defensivt skydd
+  // om en framtida integration skickar in raw IBIS-RoleName direkt.
+  const normalizeLeaders = (arr) => arr.map(l => ({
+    name: typeof l?.name === 'string' ? l.name : '',
+    role: normalizeRoleName(typeof l?.role === 'string' ? l.role : '')
+  }));
   safeOn(socket, 'updateLineups', ({ home, away, homeLeaders, awayLeaders } = {}) => {
     if (Array.isArray(home))         matchState.lineupHome        = home;
     if (Array.isArray(away))         matchState.lineupAway        = away;
-    if (Array.isArray(homeLeaders))  matchState.lineupHomeLeaders = homeLeaders;
-    if (Array.isArray(awayLeaders))  matchState.lineupAwayLeaders = awayLeaders;
+    if (Array.isArray(homeLeaders))  matchState.lineupHomeLeaders = normalizeLeaders(homeLeaders);
+    if (Array.isArray(awayLeaders))  matchState.lineupAwayLeaders = normalizeLeaders(awayLeaders);
     io.emit('stateUpdate', matchState);
   });
 
@@ -857,7 +1061,7 @@ io.on('connection', (socket) => {
     const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
                      'commentators', 'matchup', 'intermission', 'playerLowerThird',
-                     'preGameStats', 'none'];
+                     'preGameStats', 'timeout', 'none'];
     if (!allowed.includes(target)) return;
     graphicState.activeGraphic = target;
     io.emit('switchGraphic', { to: target });
@@ -895,9 +1099,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Time-out ─────────────────────────────────────────────────────────────
+  safeOn(socket, 'timeOutStart', ({ team } = {}) => {
+    startTimeOut(team);
+  });
+  safeOn(socket, 'timeOutClear', () => {
+    stopTimeOut();
+  });
+
   // ── Utvisningar ──────────────────────────────────────────────────────────
-  safeOn(socket, 'penaltyAdd', ({ team, minutes, jersey } = {}) => {
-    addPenalty(team, minutes, jersey);
+  // 'penaltyAdd' med kind === 'double' = 2+2-utvisning (två 2-min, andra
+  // alltid queued). Annars vanlig single-utvisning på `minutes` minuter.
+  safeOn(socket, 'penaltyAdd', ({ team, minutes, jersey, kind } = {}) => {
+    if (kind === 'double') {
+      addDoubleMinor(team, jersey);
+    } else {
+      addPenalty(team, minutes, jersey);
+    }
   });
   safeOn(socket, 'penaltyRemove', ({ team, id } = {}) => {
     removePenalty(team, id);
@@ -957,22 +1175,50 @@ function broadcastPenalties() {
   });
 }
 
-function addPenalty(team, minutes, jersey) {
+// addPenalty: forceQueued tvingar status='queued' oavsett aktivt-count
+// (används för andra halvan av 2+2 så den hamnar bakom första 2-min:en).
+// Returnerar null om laget redan har MAX_PENALTIES_PER_TEAM entries.
+function addPenalty(team, minutes, jersey, forceQueued = false) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
+  if (arr.length >= MAX_PENALTIES_PER_TEAM) return null;
   const m = parseInt(minutes, 10);
   if (!ALLOWED_PENALTY_MINUTES.has(m)) return null;
 
   const duration = m * 60;
+  const isQueued = forceQueued || countActive(arr) >= MAX_ACTIVE_PENALTIES;
   const entry = {
     id:        ++penaltySeq,
     duration,
-    remaining: duration,
+    // queued-poster startar inte ticka – vi sätter remaining till duration
+    // när de promoteras (så de alltid får full tid när de aktiveras).
+    remaining: isQueued ? duration : duration,
+    status:    isQueued ? 'queued' : 'active',
     jersey:    typeof jersey === 'string' ? jersey.trim().slice(0, 3) : ''
   };
   arr.push(entry);
   broadcastPenalties();
   return entry;
+}
+
+// 2+2-utvisning: två 2-min-poster där den ANDRA alltid är queued direkt.
+// Båda får samma pairId så grafiken kan rendera dem sida vid sida.
+// Kräver att laget har plats för BÅDA – avvisas annars (alternativet
+// vore att lägga bara första och tappa andra, vilket är förvirrande).
+function addDoubleMinor(team, jersey) {
+  const arr = penaltyArrayFor(team);
+  if (!arr) return null;
+  if (arr.length + 2 > MAX_PENALTIES_PER_TEAM) return null;
+  const first  = addPenalty(team, 2, jersey, false);
+  if (!first) return null;
+  const second = addPenalty(team, 2, jersey, true);
+  if (second) {
+    const pairId = `pair-${first.id}-${second.id}`;
+    first.pairId  = pairId;
+    second.pairId = pairId;
+    broadcastPenalties();
+  }
+  return { first, second };
 }
 
 function removePenalty(team, id) {
@@ -983,6 +1229,8 @@ function removePenalty(team, id) {
   const idx = arr.findIndex(p => p.id === numId);
   if (idx === -1) return false;
   arr.splice(idx, 1);
+  // Om vi tog bort en aktiv ska nästa queued promoteras direkt.
+  promoteQueued(arr);
   broadcastPenalties();
   return true;
 }
@@ -1008,12 +1256,33 @@ function clearPenalties(team) {
 //   /api/penalty/home/remove?id=42
 //   /api/penalty/home/clear
 app.get('/api/penalty/:team/add', (req, res) => {
-  const team = req.params.team;
-  const entry = addPenalty(team, req.query.minutes, req.query.jersey);
+  const team   = req.params.team;
+  const jersey = req.query.jersey;
+  const arr    = penaltyArrayFor(team);
+  if (!arr) {
+    return res.status(400).json({ success: false, error: 'Ogiltigt lag. Använd team=home eller team=away.' });
+  }
+  if (req.query.kind === 'double') {
+    if (arr.length + 2 > MAX_PENALTIES_PER_TEAM) {
+      return res.status(409).json({
+        success: false,
+        error: `2+2 kräver två lediga platser – laget har redan ${arr.length}/${MAX_PENALTIES_PER_TEAM} utvisningar.`
+      });
+    }
+    const pair = addDoubleMinor(team, jersey);
+    return res.json({ success: true, penalties: [pair.first, pair.second] });
+  }
+  if (arr.length >= MAX_PENALTIES_PER_TEAM) {
+    return res.status(409).json({
+      success: false,
+      error: `Max ${MAX_PENALTIES_PER_TEAM} utvisningar per lag. Vänta tills en löper ut.`
+    });
+  }
+  const entry = addPenalty(team, req.query.minutes, jersey);
   if (!entry) {
     return res.status(400).json({
       success: false,
-      error: 'Ogiltigt lag eller minuter. Använd minutes=2 eller minutes=5 och team=home/away.'
+      error: 'Ogiltiga minuter. Använd minutes=2/5 (+ ev. kind=double).'
     });
   }
   res.json({ success: true, penalty: entry });
@@ -1086,7 +1355,8 @@ app.get('/api/graphic/commentators/toggle', (_req, res) => {
 
 app.get('/api/graphic/:target', (req, res) => {
   const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
-                   'commentators', 'matchup', 'intermission', 'preGameStats', 'clear'];
+                   'commentators', 'matchup', 'intermission', 'preGameStats',
+                   'timeout', 'clear'];
   const target  = req.params.target;
   if (!allowed.includes(target)) {
     return res.status(400).json({ success: false, error: `Okänd grafik: ${target}` });
@@ -1144,6 +1414,12 @@ app.get('/api/graphic/:target', (req, res) => {
       error: 'Ingen statistik inför match lagrad. Hämta en match i kontrollpanelen först.'
     });
   }
+  if (to === 'timeout' && !matchState.timeOut) {
+    return res.status(400).json({
+      success: false,
+      error: 'Ingen time-out aktiv. Starta en time-out i kontrollpanelen först.'
+    });
+  }
 
   graphicState.activeGraphic = to;
   io.emit('switchGraphic', { to });
@@ -1175,6 +1451,114 @@ app.get('/api/reset', (_req, res) => {
   res.json({ success: true });
 });
 
+// ── Time-out (Stream Deck) ──────────────────────────────────────────────────
+// /api/timeout/home/start  – startar 30s time-out för hemma + visar grafik
+// /api/timeout/away/start  – samma för borta
+// /api/timeout/clear       – avsluta och göm
+app.get('/api/timeout/:team/start', (req, res) => {
+  const team = req.params.team;
+  if (team !== 'home' && team !== 'away') {
+    return res.status(400).json({ success: false, error: 'Använd team=home eller team=away.' });
+  }
+  const t = startTimeOut(team);
+  // Visa grafiken direkt så Stream Deck blir en one-click-knapp
+  graphicState.activeGraphic = 'timeout';
+  io.emit('switchGraphic', { to: 'timeout' });
+  res.json({ success: true, timeOut: t });
+});
+
+app.get('/api/timeout/clear', (_req, res) => {
+  stopTimeOut();
+  if (graphicState.activeGraphic === 'timeout') {
+    graphicState.activeGraphic = 'scoreboard';
+    io.emit('switchGraphic', { to: 'scoreboard' });
+  }
+  res.json({ success: true });
+});
+
+// ── Sponsorer ────────────────────────────────────────────────────────────────
+// Lista, ersätt och radera sponsorlogotyper. Filerna lagras i public/sponsors/
+// och listan persisteras i data/sponsors.json så att de överlever serverstart.
+// Settings-sidan POST:ar HELA listan (upp till SPONSORS_MAX) som en blandning
+// av befintliga {id, url} och nya {dataUrl, name}-poster – servern diff:ar
+// och tar bort filer som inte längre refereras.
+app.get('/api/sponsors', (_req, res) => {
+  res.json({ success: true, sponsors: sponsorState.sponsors });
+});
+
+app.post('/api/sponsors', (req, res) => {
+  const incoming = Array.isArray(req.body?.sponsors) ? req.body.sponsors : null;
+  if (!incoming) {
+    return res.status(400).json({ success: false, error: 'Förväntade { sponsors: [...] }.' });
+  }
+  if (incoming.length > SPONSORS_MAX) {
+    return res.status(400).json({
+      success: false,
+      error: `Max ${SPONSORS_MAX} sponsorer tillåts.`
+    });
+  }
+
+  // Snabb-uppslag av befintliga poster (för att behålla deras filer)
+  const existingById = new Map(sponsorState.sponsors.map(s => [s.id, s]));
+  const keepIds      = new Set();
+  const nextList     = [];
+
+  try {
+    for (const item of incoming) {
+      if (item && item.id && existingById.has(item.id)) {
+        // Befintlig sponsor – behåll filen, ev. uppdatera namn
+        const existing = existingById.get(item.id);
+        const name = typeof item.name === 'string' ? item.name.trim().slice(0, 80) : existing.name;
+        nextList.push({ ...existing, name });
+        keepIds.add(item.id);
+      } else if (item && typeof item.dataUrl === 'string') {
+        // Ny sponsor – validera + skriv fil
+        const parsed = parseDataUrl(item.dataUrl);
+        if (!parsed) {
+          return res.status(400).json({
+            success: false,
+            error: 'Ogiltig bildtyp. Stödda format: PNG, JPG, GIF, WEBP, SVG.'
+          });
+        }
+        const entry = writeSponsorFile(parsed, item.name);
+        nextList.push(entry);
+        keepIds.add(entry.id);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Varje sponsor måste innehålla antingen id (befintlig) eller dataUrl (ny).'
+        });
+      }
+    }
+
+    // Ta bort filer för borttagna sponsorer
+    for (const existing of sponsorState.sponsors) {
+      if (!keepIds.has(existing.id)) deleteSponsorFile(existing.url);
+    }
+
+    sponsorState.sponsors = nextList;
+    saveSponsorManifest();
+    broadcastSponsors();
+    res.json({ success: true, sponsors: sponsorState.sponsors });
+  } catch (err) {
+    console.error('[sponsors] POST misslyckades:', err);
+    res.status(500).json({ success: false, error: err.message || 'Internt fel.' });
+  }
+});
+
+app.delete('/api/sponsors/:id', (req, res) => {
+  const id = req.params.id;
+  const idx = sponsorState.sponsors.findIndex(s => s.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Sponsorn hittades inte.' });
+  }
+  const [removed] = sponsorState.sponsors.splice(idx, 1);
+  deleteSponsorFile(removed.url);
+  saveSponsorManifest();
+  broadcastSponsors();
+  res.json({ success: true, sponsors: sponsorState.sponsors });
+});
+
 // ── Statusfråga (för Stream Deck-feedback) ───────────────────────────────────
 app.get('/api/state', (_req, res) => {
   res.json({
@@ -1191,7 +1575,8 @@ app.get('/api/state', (_req, res) => {
     period:       matchState.period,
     activeGraphic: graphicState.activeGraphic,
     penaltiesHome: matchState.penaltiesHome,
-    penaltiesAway: matchState.penaltiesAway
+    penaltiesAway: matchState.penaltiesAway,
+    timeOut:       matchState.timeOut
   });
 });
 

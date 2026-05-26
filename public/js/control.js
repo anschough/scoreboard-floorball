@@ -5,7 +5,6 @@ const socket = io();
 // ════════════════════════════════════════════════════════════════════════════
 
 const statusEl   = document.getElementById('connection-status');
-const activeInd  = document.getElementById('activeGraphicIndicator');
 
 // Bildmixer (sticky header)
 const mixerBtns  = document.querySelectorAll('.mixer-btn');
@@ -104,21 +103,6 @@ let pendingPreGameStats   = null;
 // Senast valda spelar-/ledar-skylt – för visuell highlight + toggle
 let activeLowerThirdKey = '';
 
-// Läsbar etikett för varje grafik-nyckel
-const GRAPHIC_LABELS = {
-  scoreboard:   'Scoreboard',
-  lineupHome:   'Hemmalaguppställning',
-  lineupAway:   'Bortalagsuppställning',
-  table:        'Ligatabell',
-  fixtures:     'Omgångens matcher',
-  commentators: 'Kommentatorer (lower-third)',
-  matchup:      'Inför/Paus (Matchup)',
-  intermission: 'Pausvila',
-  playerLowerThird: 'Spelar-/Ledar-skylt',
-  preGameStats: 'Statistik inför match',
-  none:         'Ingen grafik visas'
-};
-
 // ════════════════════════════════════════════════════════════════════════════
 // BILDMIXER – direktväxling till valfri grafik
 // ════════════════════════════════════════════════════════════════════════════
@@ -185,8 +169,12 @@ function renderPenaltyList(listEl, penalties) {
         <button class="btn-penalty-remove" title="Ta bort utvisning" aria-label="Ta bort utvisning">×</button>`;
       listEl.appendChild(li);
     }
+    const isQueued = p.status === 'queued';
+    li.classList.toggle('is-queued', isQueued);
     li.querySelector('.penalty-row-jersey').textContent = p.jersey ? `#${p.jersey}` : '';
-    li.querySelector('.penalty-row-time').textContent   = formatPenaltyTime(p.remaining);
+    li.querySelector('.penalty-row-time').textContent   = isQueued
+      ? `VÄNTAR · ${formatPenaltyTime(p.duration)}`
+      : formatPenaltyTime(p.remaining);
   });
 
   // Steg 3: rendera/städa tom-läge som en riktig <li> så skärmläsare hör
@@ -203,10 +191,37 @@ function renderPenaltyList(listEl, penalties) {
   }
 }
 
+// Måste matcha MAX_PENALTIES_PER_TEAM i server.js
+const MAX_PENALTIES_PER_TEAM = 2;
+
 function updatePenaltyCounts(home, away) {
-  const fmt = (n) => `${n} aktiv${n === 1 ? '' : 'a'}`;
-  penaltyHomeCount.textContent = fmt(home.length);
-  penaltyAwayCount.textContent = fmt(away.length);
+  // Visar antal AKTIVA + antal köade (om några), så operatören vet
+  // direkt om en utvisning ligger och väntar bakom kulisserna.
+  const fmt = (arr) => {
+    const active = arr.filter(p => p.status !== 'queued').length;
+    const queued = arr.filter(p => p.status === 'queued').length;
+    const base   = `${active} aktiv${active === 1 ? '' : 'a'}`;
+    return queued > 0 ? `${base} · ${queued} i kö` : base;
+  };
+  penaltyHomeCount.textContent = fmt(home);
+  penaltyAwayCount.textContent = fmt(away);
+  // Disabla knappar när cap är nådd – 2+2 kräver dessutom 2 lediga platser.
+  updatePenaltyButtons('home', home);
+  updatePenaltyButtons('away', away);
+}
+
+function updatePenaltyButtons(team, arr) {
+  const slotsLeft = MAX_PENALTIES_PER_TEAM - arr.length;
+  document.querySelectorAll(`.btn-penalty[data-team="${team}"]`).forEach(btn => {
+    const needsTwo = btn.dataset.kind === 'double';
+    const required = needsTwo ? 2 : 1;
+    btn.disabled = slotsLeft < required;
+    btn.title = btn.disabled
+      ? `Lagets utvisningar fulla (${arr.length}/${MAX_PENALTIES_PER_TEAM})`
+      : (btn.dataset.kind === 'double'
+          ? '2+2: lägger två 2-min där andra startar när första går ut'
+          : '');
+  });
 }
 
 function applyPenalties(home, away) {
@@ -215,14 +230,20 @@ function applyPenalties(home, away) {
   updatePenaltyCounts(home || [], away || []);
 }
 
-// Klick-delegering för +2/+5-knappar (oavsett vilket lag)
+// Klick-delegering för +2/+2+2/+5-knappar (oavsett vilket lag).
+// data-kind="double" → 2+2 (servern lägger till två 2-min, andra queued).
 document.querySelectorAll('.btn-penalty').forEach(btn => {
   btn.addEventListener('click', () => {
     const team    = btn.dataset.team;
+    const kind    = btn.dataset.kind || 'single';
     const minutes = parseInt(btn.dataset.minutes, 10);
     const jerseyInput = team === 'home' ? inputPenaltyHomeJersey : inputPenaltyAwayJersey;
     const jersey = jerseyInput.value.trim();
-    socket.emit('penaltyAdd', { team, minutes, jersey });
+    if (kind === 'double') {
+      socket.emit('penaltyAdd', { team, kind: 'double', jersey });
+    } else {
+      socket.emit('penaltyAdd', { team, minutes, jersey });
+    }
     // Töm tröjnummer-fältet så nästa utvisning börjar tomt
     jerseyInput.value = '';
   });
@@ -242,6 +263,58 @@ document.querySelectorAll('.btn-penalty').forEach(btn => {
   });
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// TIME-OUT
+// ════════════════════════════════════════════════════════════════════════════
+const btnTimeOutHome  = document.getElementById('btnTimeOutHome');
+const btnTimeOutAway  = document.getElementById('btnTimeOutAway');
+const btnTimeOutClear = document.getElementById('btnTimeOutClear');
+const elTimeOutStatus = document.getElementById('timeoutStatus');
+
+// Senast kända lagnamn så vi kan visa "Hemma · LAG A" i statusrutan
+let latestTeamA = 'Hemma';
+let latestTeamB = 'Borta';
+
+function renderTimeOutStatus(timeOut) {
+  if (!elTimeOutStatus) return;
+  if (!timeOut) {
+    elTimeOutStatus.classList.remove('is-active');
+    elTimeOutStatus.innerHTML = '<span class="timeout-status-empty">Ingen aktiv time-out</span>';
+    [btnTimeOutHome, btnTimeOutAway].forEach(b => b && (b.disabled = false));
+    if (btnTimeOutClear) btnTimeOutClear.disabled = true;
+    return;
+  }
+  const teamLabel = timeOut.team === 'home' ? `Hemma · ${latestTeamA}` : `Borta · ${latestTeamB}`;
+  const isFinal   = timeOut.remaining <= 5;
+  elTimeOutStatus.classList.add('is-active');
+  elTimeOutStatus.innerHTML = `
+    <span class="timeout-status-team">${teamLabel}</span>
+    <span class="timeout-status-count${isFinal ? ' is-final' : ''}">${timeOut.remaining} s</span>`;
+  // Bara en time-out åt gången – disabla start-knappar tills den avslutats
+  [btnTimeOutHome, btnTimeOutAway].forEach(b => b && (b.disabled = true));
+  if (btnTimeOutClear) btnTimeOutClear.disabled = false;
+}
+
+[btnTimeOutHome, btnTimeOutAway].forEach(btn => {
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const team = btn.dataset.team;
+    socket.emit('timeOutStart', { team });
+    // Visa grafiken direkt – samma one-click-UX som Stream Deck-rutten
+    socket.emit('switchGraphic', { to: 'timeout' });
+  });
+});
+if (btnTimeOutClear) {
+  btnTimeOutClear.addEventListener('click', () => {
+    socket.emit('timeOutClear');
+    socket.emit('switchGraphic', { to: 'scoreboard' });
+  });
+}
+
+socket.on('timeOutUpdate', ({ timeOut } = {}) => {
+  renderTimeOutStatus(timeOut);
+});
+
 // Riktade penalty-uppdateringar (kommer varje sekund från klock-loopen
 // när utvisningar är aktiva). Använder samma render som stateUpdate så
 // inga element rebuildas i onödan.
@@ -253,11 +326,9 @@ socket.on('penaltiesUpdate', ({ penaltiesHome, penaltiesAway }) => {
 // AKTIV GRAFIK-INDIKATOR
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Uppdaterar ON AIR-pillen + sätter .on-air på rätt mixer-knapp.
-   Speglar live-statusen till aria-pressed så skärmläsare kan höra
-   vilken grafik som är aktiv (R3). */
+/** Speglar live-statusen till .on-air + aria-pressed på rätt mixer-knapp så
+ *  skärmläsare kan höra vilken grafik som är aktiv (R3). */
 function updateActiveIndicator(key) {
-  activeInd.textContent = GRAPHIC_LABELS[key] || key;
   // Mappa 'none' (= göm allt) till mixerns 'clear'-knapp för visuell ON AIR
   const mixerKey = key === 'none' ? 'clear' : key;
   mixerBtns.forEach(btn => {
@@ -271,12 +342,12 @@ function updateActiveIndicator(key) {
 // SOCKET – ANSLUTNING
 // ════════════════════════════════════════════════════════════════════════════
 socket.on('connect', () => {
-  statusEl.textContent = 'Ansluten';
+  statusEl.textContent = 'Server ansluten';
   statusEl.className   = 'status connected';
 });
 
 socket.on('disconnect', () => {
-  statusEl.textContent = 'Frånkopplad';
+  statusEl.textContent = 'Servern frånkopplad';
   statusEl.className   = 'status disconnected';
 });
 
@@ -293,6 +364,9 @@ socket.on('stateUpdate', (state) => {
   if (document.activeElement !== inputTeamBShort) inputTeamBShort.value = state.teamBShort || '';
   labelA.textContent        = state.teamA;
   labelB.textContent        = state.teamB;
+  // Cache:a lagnamn så time-out-statusrutan kan visa "Hemma · LAG A"
+  latestTeamA = state.teamA || 'Hemma';
+  latestTeamB = state.teamB || 'Borta';
   displayScoreA.textContent = state.scoreA;
   displayScoreB.textContent = state.scoreB;
   displayClock.textContent  = state.clock;
@@ -319,6 +393,9 @@ socket.on('stateUpdate', (state) => {
   // gång state ändras icke-relaterat till klocktick (penaltiesUpdate sköter
   // sekund-för-sekund-uppdateringen så den här gör ingen flash).
   applyPenalties(state.penaltiesHome, state.penaltiesAway);
+
+  // Hydrera time-out-status (för operatör som ansluter mitt under en pågående)
+  renderTimeOutStatus(state.timeOut);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });

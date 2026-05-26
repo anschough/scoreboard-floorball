@@ -1,0 +1,224 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   SETTINGS – Sponsoruppladdning
+   Bygger ovanpå control.css design tokens (knappar, kort, palett).
+═══ */
+
+/* ── Verktygsrad (Lägg till + räknare) ──────────────────────────────────── */
+.sponsor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.sponsor-add-btn {
+  /* Renderas som <label> men ska se ut som .btn-primary */
+  display: inline-block;
+  cursor: pointer;
+}
+
+.sponsor-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sponsor-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.sponsor-count.sponsor-count-full { color: var(--err); }
+
+
+/* ── Logotype-lista ─────────────────────────────────────────────────────── */
+.sponsor-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.sponsor-list:empty { display: none; }
+.sponsor-list:empty + .scroll-empty { display: block; }
+.sponsor-list:not(:empty) ~ .scroll-empty { display: none; }
+
+.sponsor-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sponsor-card:hover { border-color: var(--border-strong); }
+
+.sponsor-card-preview {
+  background:
+    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
+    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
+    rgba(0, 0, 0, 0.25);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+  border-radius: 6px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  overflow: hidden;
+}
+.sponsor-card-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sponsor-card-name {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+}
+
+.sponsor-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sponsor-action {
+  flex: 1;
+  background: rgba(var(--lb-500-rgb), 0.08);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s var(--ease-out);
+}
+.sponsor-action:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--sollentuna-dark-blue);
+}
+.sponsor-action:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.sponsor-action-remove {
+  flex: 0 0 auto;
+  color: var(--err);
+  border-color: rgba(255, 107, 107, 0.32);
+  background: rgba(255, 107, 107, 0.08);
+  padding: 6px 10px;
+}
+.sponsor-action-remove:hover {
+  background: var(--err-bg);
+  color: #fff;
+  border-color: var(--err-bg);
+}
+
+
+/* ── Spara-rad + statusmeddelande ──────────────────────────────────────── */
+.sponsor-save-row {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Återanvänder .fetch-status (loading/ok/error) från control.css.
+   Dölj när den är tom så raden inte tar onödig plats. */
+.sponsor-save-row .fetch-status:empty { display: none; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FÖRHANDSGRANSKNING – Speglar look:en på sponsor-stripen i graphics.html
+═══ */
+.sponsor-preview-wrap {
+  position: relative;
+}
+
+.sponsor-preview-strip {
+  /* Speglar live-stripens mörkblå bakgrund */
+  background: rgba(var(--dark-blue-rgb), 1);
+  border: 1px solid rgba(var(--lb-500-rgb), 0.18);
+  border-radius: 8px;
+  height: 78px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sponsor-preview-strip::before,
+.sponsor-preview-strip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+.sponsor-preview-strip::before {
+  left: 0;
+  background: linear-gradient(90deg,
+              rgba(var(--dark-blue-rgb), 1), transparent);
+}
+.sponsor-preview-strip::after {
+  right: 0;
+  background: linear-gradient(-90deg,
+              rgba(var(--dark-blue-rgb), 1), transparent);
+}
+
+.sponsor-preview-track {
+  display: flex;
+  align-items: center;
+  gap: 60px;
+  padding: 0 30px;
+  width: max-content;
+  animation: sponsorScrollPreview 40s linear infinite;
+  will-change: transform;
+}
+.sponsor-preview-track:empty { animation: none; }
+
+.sponsor-preview-track img {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
+  filter: brightness(0) invert(1);  /* Vita logos mot mörk bakgrund */
+  opacity: 0.92;
+}
+
+@keyframes sponsorScrollPreview {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.sponsor-preview-empty {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+.sponsor-preview-track:not(:empty) + .sponsor-preview-empty { display: none; }
+
+
+/* ── Headerns högerställda länk (Stream Deck shortcuts) ────────────────── */
+.header-btn-stacked-right {
+  margin-left: auto;
+}
