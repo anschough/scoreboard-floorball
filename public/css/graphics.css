@@ -1180,6 +1180,180 @@ html, body {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   SPELAR-/LEDAR-SKYLT (Lower-third nere till vänster)
+   Lagnamn som rubrik · stort tröjnummer + namn på en rad.
+═══ */
+@property --player-lt-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.player-lt-panel {
+  position: fixed;
+  left: 48px;
+  bottom: 48px;
+  max-width: 720px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 12px;
+  box-shadow: var(--glass-shadow);
+
+  opacity: 0;
+  transform: translateX(-32px) scale(0.97);
+  pointer-events: none;
+
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.4s var(--ease-in);
+  transition-delay: 0.18s;
+  will-change: opacity, transform;
+}
+
+.player-lt-panel.visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+  transition: opacity 0.45s var(--ease-out),
+              transform 0.55s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+.player-lt-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--player-lt-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: playerLtTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+
+@keyframes playerLtTraveler {
+  to { --player-lt-angle: 360deg; }
+}
+
+.player-lt-inner {
+  padding: 20px 32px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.player-lt-team {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.3s var(--ease-out);
+  transition-delay: 0s;
+}
+
+.player-lt-panel.visible .player-lt-team {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.28s;
+}
+
+.player-lt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  min-width: 0;
+
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.35s var(--ease-snap);
+  transition-delay: 0s;
+}
+
+.player-lt-panel.visible .player-lt-row {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.4s;
+}
+
+.player-lt-num {
+  font-family: var(--font-display);
+  font-size: 3.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.55);
+}
+
+.player-lt-num:empty { display: none; }
+
+.player-lt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.player-lt-name {
+  font-family: var(--font-name);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.player-lt-role {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(var(--lb-900-rgb), 0.35);
+}
+
+.player-lt-role:empty { display: none; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    MATCHUP-SKYLT (Inför/Paus) – minimalistisk premium broadcast-design
    • Nästan transparent bakgrund, tunn glasremsa
    • Animerad ljuslinje som tracerar boxens kant kontinuerligt

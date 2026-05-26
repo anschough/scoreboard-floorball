@@ -1015,6 +1015,54 @@ input[type="text"].input-clock-set.input-error {
   text-align: right;
 }
 
+/* Klickbar rad – skickar spelar-/ledar-skylten live */
+.preview-player.is-clickable {
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.preview-player.is-clickable:hover {
+  background: rgba(var(--lb-500-rgb), 0.12);
+  color: var(--accent-hi);
+}
+.preview-player.is-active {
+  background: rgba(var(--lb-500-rgb), 0.22);
+  color: var(--accent-hi);
+  box-shadow: inset 0 0 0 1px rgba(var(--lb-500-rgb), 0.45);
+}
+.preview-player.is-active .preview-player-num,
+.preview-player.is-clickable:hover .preview-player-num {
+  color: var(--accent-hi);
+}
+
+/* Ledare-sektion under spelar-listan */
+.ib-leaders-wrap {
+  padding: 4px 14px 0;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.ib-leaders-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  padding: 8px 0 2px;
+}
+.ib-leaders-wrap .preview-list {
+  padding: 2px 0 8px;
+}
+.preview-player-role {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  min-width: 70px;
+}
+
 /* ── Standings preview ── */
 .preview-table-wrap {
   overflow-x: auto;
