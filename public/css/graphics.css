@@ -1360,6 +1360,247 @@ html, body {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   STATISTIK INFÖR MATCH – centrerad informationsskylt
+   • Mörk frosted-glass-platta (samma DNA som lineup/table)
+   • Animerad ljuslinje runt kanten ("traveler")
+   • Header med eyebrow + lag-headers, sen 3-kolumns tabell:
+     [hemma-värde · etikett · borta-värde]
+   • Senaste-5-prickarna är inline-spans med exakta IBIS-färger
+═══ */
+
+@property --pg-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.pregame-stats-panel {
+  width: 1180px;
+  max-width: 94vw;
+  max-height: 92vh;
+  padding-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  /* Använder samma tjockare glas-bas som lineup/table för läsbarhet
+     mot rörligt spel. */
+  background: linear-gradient(160deg,
+              rgba(10, 16, 26, 0.96) 0%,
+              rgba(4, 10, 18, 0.98) 100%);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7),
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+              0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
+/* Animerad ljuslinje runt kanten – exakt samma broadcast-look som
+   matchup/lineup/table men med egen @property-vinkel så animationen
+   inte synkar in i lås med övriga paneler. */
+.pregame-stats-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--pg-angle),
+    rgba(var(--lb-500-rgb), 0.06) 0deg,
+    rgba(var(--lb-500-rgb), 0.06) 270deg,
+    rgba(var(--lb-900-rgb), 0.4)  295deg,
+    rgba(var(--lb-900-rgb), 1)    315deg,
+    rgba(var(--lb-500-rgb), 0.7)  335deg,
+    rgba(var(--lb-500-rgb), 0.06) 355deg,
+    rgba(var(--lb-500-rgb), 0.06) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: pgTraveler 7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
+}
+@keyframes pgTraveler { to { --pg-angle: 360deg; } }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.pg-header {
+  padding: 24px 44px 18px;
+  border-bottom: 1px solid var(--border-accent);
+  background: linear-gradient(180deg,
+              rgba(var(--lb-500-rgb), 0.10) 0%,
+              transparent 100%);
+  position: relative;
+
+  /* Stagger – panelen kommer in först, sen header glider in */
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.4s var(--ease-snap);
+  transition-delay: 0s;
+}
+.pregame-stats-panel.visible .pg-header {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.28s;
+}
+
+/* Glödande underlinje – speglar scoreboardens neon-stripe */
+.pg-header::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              var(--accent-hi) 50%,
+              transparent 100%);
+  box-shadow: var(--accent-glow);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.pg-eyebrow {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  margin-bottom: 18px;
+  text-shadow: 0 0 14px rgba(var(--lb-900-rgb), 0.35);
+}
+
+.pg-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
+  align-items: center;
+}
+.pg-team {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+.pg-team-home { justify-content: flex-start; }
+.pg-team-away { justify-content: flex-end; }
+
+.pg-team-logo {
+  width: 78px; height: 78px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.pg-team-logo img {
+  width: 78px; height: 78px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+.pg-team-logo .matchup-logo-placeholder {
+  width: 78px; height: 78px;
+  font-size: 2rem;
+}
+
+.pg-team-name {
+  font-family: var(--font-name);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ── Tabell ─────────────────────────────────────────────────────────── */
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+
+  /* Stagger – tabellen kommer in efter header */
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.4s var(--ease-snap);
+  transition-delay: 0s;
+}
+.pregame-stats-panel.visible .pg-table {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.4s;
+}
+
+.pg-table td {
+  padding: 7px 24px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-strong);
+}
+.pg-table tr.pg-row:last-child td { border-bottom: none; }
+
+/* Fasta kolumnbredder så hemma/borta-värdena alltid linjerar perfekt */
+.pg-val { width: 26%; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.35rem; }
+.pg-label { width: 48%; text-align: center; color: var(--text-soft); font-weight: 500; font-size: 1.05rem; letter-spacing: 0.04em; }
+
+/* Stora siffror på "headline-värden" – Placering, Antal PP, Effektivitet osv */
+.pg-row.pg-big .pg-val { font-size: 1.7rem; }
+
+/* Section-rad – större rubrik som spänner alla kolumner */
+.pg-section-row td {
+  text-align: center;
+  background: rgba(var(--lb-500-rgb), 0.08);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  padding: 8px 24px;
+}
+
+/* Senaste 5 – små färgade dots, samma färger som stats.innebandy.se */
+.pg-dots {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+.pg-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6),
+              0 0 6px rgba(255, 255, 255, 0.04) inset;
+}
+.pg-muted {
+  color: var(--text-faint);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Stagger – varje rad kaskadar in EFTER att tabellen är synlig */
+.pg-row {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+.pregame-stats-panel.visible .pg-row {
+  animation: pgRowCascade 0.42s var(--ease-snap) forwards;
+  /* animation-delay sätts inline från renderPreGameStats() */
+}
+@keyframes pgRowCascade {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    MATCHUP-SKYLT (Inför/Paus) – minimalistisk premium broadcast-design
    • Nästan transparent bakgrund, tunn glasremsa
    • Animerad ljuslinje som tracerar boxens kant kontinuerligt

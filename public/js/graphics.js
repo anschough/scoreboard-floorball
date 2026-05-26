@@ -47,6 +47,14 @@ const elPlayerLtName = document.getElementById('playerLtName');
 const elPenaltiesHome = document.getElementById('penalties-home');
 const elPenaltiesAway = document.getElementById('penalties-away');
 
+// Statistik inför match
+const elPreGame             = document.getElementById('pregame-stats-graphic');
+const elPgHomeName          = document.getElementById('pgHomeName');
+const elPgAwayName          = document.getElementById('pgAwayName');
+const elPgHomeLogo          = document.getElementById('pgHomeLogo');
+const elPgAwayLogo          = document.getElementById('pgAwayLogo');
+const elPgTableBody         = document.getElementById('pgTableBody');
+
 // Intermission/Pausvila
 const elIntermission        = document.getElementById('intermission-graphic');
 const elIntermissionHomeName = document.getElementById('intermissionHomeName');
@@ -64,7 +72,8 @@ const graphicElements = {
   commentators: elCommentators,
   matchup:      elMatchup,
   intermission: elIntermission,
-  playerLowerThird: elPlayerLt
+  playerLowerThird: elPlayerLt,
+  preGameStats: elPreGame
 };
 
 // Grafiker som tillåter scoreboarden att stå kvar (lower-third overlays).
@@ -526,6 +535,83 @@ function applyPenalties(home, away) {
 
 
 // ════════════════════════════════════════════════════════════════════════════
+// STATISTIK INFÖR MATCH
+// Renderar IBIS' pregamestats-data + härledda PP/BP-värden. Rader spelas
+// upp i en kaskad – samma stagger-mönster som tabellen.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Sekventiella rader för pre-game-tabellen. Section-poster spänner alla
+ *  tre kolumner. html: true betyder att värdet redan är säker HTML
+ *  (används för Senaste 5-prickarna). */
+function preGameRowsFor(data) {
+  return [
+    { label: 'Tabellplacering',  h: data.home.ranking,          a: data.away.ranking,          big: true },
+    { label: 'Inbördes möten',   h: data.home.meetingWins,      a: data.away.meetingWins,      big: true },
+    { label: 'Senaste mötet',    h: data.home.goalsLastMeeting, a: data.away.goalsLastMeeting, big: true },
+    { label: 'Senaste 5 matcherna', h: lastDotsHtml(data.home.lastGames),
+                                    a: lastDotsHtml(data.away.lastGames), html: true },
+    { section: 'Powerplay' },
+    { label: 'Antal PP',                h: data.home.numberOfPPs,    a: data.away.numberOfPPs,    big: true },
+    { label: 'Effektivitet i PP',       h: data.home.ppEffectivity,  a: data.away.ppEffectivity,  big: true },
+    { label: 'Gjorda mål i PP',         h: data.home.ppGoalsScored,  a: data.away.ppGoalsScored },
+    { label: 'Snittid gjorda mål i PP', h: data.home.ppAvgGoalTime,  a: data.away.ppAvgGoalTime },
+    { label: 'Insläppta mål i PP',      h: data.home.ppGoalsAgainst, a: data.away.ppGoalsAgainst },
+    { section: 'Boxplay' },
+    { label: 'Antal BP',                h: data.home.numberOfBPs,    a: data.away.numberOfBPs,    big: true },
+    { label: 'Effektivitet i BP',       h: data.home.bpEffectivity,  a: data.away.bpEffectivity,  big: true },
+    { label: 'Insläppta mål i BP',      h: data.home.bpGoalsAgainst, a: data.away.bpGoalsAgainst },
+    { label: 'Snittid insläppta mål i BP', h: data.home.bpAvgGoalAgainstTime,
+                                           a: data.away.bpAvgGoalAgainstTime },
+    { label: 'Gjorda mål i BP',         h: data.home.bpGoalsScored,  a: data.away.bpGoalsScored }
+  ];
+}
+
+function lastDotsHtml(lastGames) {
+  if (!Array.isArray(lastGames) || !lastGames.length) {
+    return '<span class="pg-muted">saknas</span>';
+  }
+  return `<span class="pg-dots">` + lastGames.map(g =>
+    `<span class="pg-dot" style="background:${g.color}"></span>`
+  ).join('') + `</span>`;
+}
+
+function escapeHtmlGfx(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderPreGameStats(data) {
+  if (!data) {
+    elPgTableBody.innerHTML = '';
+    return;
+  }
+  elPgHomeName.textContent = (data.home.teamName || 'HEMMA').toUpperCase();
+  elPgAwayName.textContent = (data.away.teamName || 'BORTA').toUpperCase();
+  renderLogo(elPgHomeLogo, data.home.logo, data.home.teamName);
+  renderLogo(elPgAwayLogo, data.away.logo, data.away.teamName);
+
+  const rows = preGameRowsFor(data);
+  elPgTableBody.innerHTML = rows.map((r, i) => {
+    // Stagger – header tar 0.28-0.36s, sen rader 0.04s extra per rad
+    const delay = `${0.55 + i * 0.04}s`;
+    if (r.section) {
+      return `<tr class="pg-row pg-section-row" style="animation-delay:${delay}"><td colspan="3">${escapeHtmlGfx(r.section)}</td></tr>`;
+    }
+    const sizeCls = r.big ? ' pg-big' : '';
+    const hCell = r.html ? r.h : escapeHtmlGfx(r.h);
+    const aCell = r.html ? r.a : escapeHtmlGfx(r.a);
+    return `<tr class="pg-row${sizeCls}" style="animation-delay:${delay}">
+      <td class="pg-val pg-val-home">${hCell}</td>
+      <td class="pg-label">${escapeHtmlGfx(r.label)}</td>
+      <td class="pg-val pg-val-away">${aCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
 // SOCKET-LYSSNARE
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -604,6 +690,10 @@ socket.on('stateUpdate', (state) => {
 
   // Spelar-/ledar-lower-third
   renderPlayerLowerThird(state.playerLowerThird);
+
+  // Statistik inför match – hydrera DOM. Skylten visas/döljs via
+  // switchTo()/graphicState så vi rör inte synligheten här.
+  renderPreGameStats(state.preGameStats || null);
 
   // Utvisningar – hydrera från full state vid connect/reload, sen sköter
   // penaltiesUpdate sekund-för-sekund-tickande utan att rebuild:a DOM.

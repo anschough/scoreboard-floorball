@@ -188,6 +188,18 @@ h2 {
   color: var(--sollentuna-dark-blue);
 }
 
+/* "Öppna grafik" – tydligare visuell vikt med en liten extern-länk-pil
+   så det är uppenbart att klicken öppnar en ny flik. */
+.header-btn-graphics {
+  background: rgba(var(--lb-500-rgb), 0.2);
+  border-color: rgba(var(--lb-500-rgb), 0.45);
+}
+.header-btn-graphics::after {
+  content: ' ↗';
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
 /* ── Standalone docs-sida (api-docs.html) ──────────────────────────── */
 .docs-body {
   overflow: auto;
@@ -1061,6 +1073,68 @@ input[type="text"].input-clock-set.input-error {
   text-transform: uppercase;
   color: var(--text-muted);
   min-width: 70px;
+}
+
+/* ── Statistik inför match preview (read-only) ───────────────────────────── */
+.pregame-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  table-layout: fixed;
+}
+.pregame-preview-table th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.pregame-preview-table .pg-col-home,
+.pregame-preview-table .pg-col-away { width: 26%; }
+.pregame-preview-table .pg-col-label { width: 48%; }
+.pregame-preview-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+.pregame-preview-table .pg-val {
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pregame-preview-table .pg-label {
+  text-align: center;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+.pregame-preview-table .pg-section td {
+  text-align: center;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(var(--lb-500-rgb), 0.06);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 6px 8px;
+}
+.pregame-preview-table .pg-dots {
+  display: inline-flex;
+  gap: 4px;
+  justify-content: center;
+}
+.pregame-preview-table .pg-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+.pregame-preview-table .pg-muted {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 500;
 }
 
 /* ── Standings preview ── */
