@@ -804,10 +804,10 @@ btnSendIbAway.addEventListener('click', () => {
     if (!row) return;
     const key = row.dataset.ltKey || '';
     if (key && key === activeLowerThirdKey) {
-      // Toggle av: släck skylten och växla bort grafiken
+      // Toggle av: släck skylten utan att visa scoreboarden efteråt
       activeLowerThirdKey = '';
       socket.emit('updatePlayerLowerThird', null);
-      socket.emit('switchGraphic', { to: 'scoreboard' });
+      socket.emit('switchGraphic', { to: 'none' });
     } else {
       activeLowerThirdKey = key;
       socket.emit('updatePlayerLowerThird', {

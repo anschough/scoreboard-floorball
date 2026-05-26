@@ -1275,14 +1275,17 @@ html, body {
 
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.3s var(--ease-out),
-              transform 0.3s var(--ease-out);
-  transition-delay: 0s;
+  /* Exit-timing matchar panelen så text och box försvinner samtidigt */
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.35s var(--ease-in);
+  transition-delay: 0.18s;
 }
 
 .player-lt-panel.visible .player-lt-team {
   opacity: 1;
   transform: translateY(0);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.3s var(--ease-out);
   transition-delay: 0.28s;
 }
 
@@ -1294,14 +1297,17 @@ html, body {
 
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.3s var(--ease-out),
-              transform 0.35s var(--ease-snap);
-  transition-delay: 0s;
+  /* Exit-timing matchar panelen så text och box försvinner samtidigt */
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.35s var(--ease-in);
+  transition-delay: 0.18s;
 }
 
 .player-lt-panel.visible .player-lt-row {
   opacity: 1;
   transform: translateY(0);
+  transition: opacity 0.3s var(--ease-out),
+              transform 0.35s var(--ease-snap);
   transition-delay: 0.4s;
 }
 
@@ -1454,11 +1460,14 @@ html, body {
 }
 .matchup-eyebrow:empty { display: none; }
 
-/* Hovedlinjen: [home-logo  home-name]  VS  [away-name  away-logo] */
+/* Huvudlinjen: [home-logo  home-name]  VS  [away-name  away-logo].
+   Flex med justify-content: center centrerar hela gruppen som en enhet
+   så att logotyperna alltid ligger lika långt från panelens kanter
+   oavsett hur långa lagnamnen är. */
 .matchup-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 40px;
   margin-bottom: 28px;
 }
@@ -1468,18 +1477,9 @@ html, body {
   align-items: center;
   gap: 32px;
   min-width: 0;
-}
-
-/* Hemmalag-block: logo (vänster) ___ namn (mot center) */
-.matchup-team-home {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-/* Bortalag-block: namn (mot center) ___ logo (höger) */
-.matchup-team-away {
-  justify-content: flex-start;
-  text-align: left;
+  /* Cap så att inget lag äter mer än sin halva av raden – ger
+     fitAllTeamNames() ett tak att mäta mot för auto-shrink av långa namn. */
+  max-width: calc(50% - 50px);
 }
 
 .matchup-logo-wrap {
@@ -1567,7 +1567,7 @@ html, body {
   font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: 0.32em;
-  color: var(--sollentuna-lb-500);
+  color: var(--sollentuna-white);
   text-transform: uppercase;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95),
                0 1px 2px rgba(0, 0, 0, 0.9);
@@ -1712,12 +1712,12 @@ html, body {
                0 0 22px   rgba(var(--lb-900-rgb), 0.45);
 }
 
-/* Layout-grid: [home-logo  home-name]  VS  [away-name  away-logo].
-   Identisk struktur som matchup-row. */
+/* Layout: identisk struktur som matchup-row – flex-centrerar hela
+   gruppen så logotyperna alltid ligger symmetriskt mot panelens kanter. */
 .intermission-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 40px;
   margin-bottom: 28px;
 }
@@ -1727,16 +1727,7 @@ html, body {
   align-items: center;
   gap: 32px;
   min-width: 0;
-}
-
-.intermission-team-home {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-.intermission-team-away {
-  justify-content: flex-start;
-  text-align: left;
+  max-width: calc(50% - 50px);
 }
 
 .intermission-logo-wrap {
