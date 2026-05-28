@@ -81,7 +81,16 @@ let matchState = {
   // så UI:t kan särskilja "perioden synkad just nu" från "scoren synkad".
   //   periodSyncStatus = { ok: boolean, ts: number, error?: string } | null
   periodSyncMode: 'api',
-  periodSyncStatus: null
+  periodSyncStatus: null,
+  // Periodlängd i minuter. Matchklockan stoppas automatiskt när
+  // elapsedSeconds når periodLengthMinutes * 60 (default 20 min enligt
+  // IBF-regelboken). Persisteras i data/settings.json och behålls
+  // mellan match-nollställningar.
+  periodLengthMinutes: 20,
+  // Övertidens längd i minuter. Tillämpas när period === 4. Default
+  // 5 min enligt IBF-regelboken (sudden death-overtid). Samma
+  // persistens som periodLengthMinutes.
+  overtimeLengthMinutes: 5
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -192,6 +201,49 @@ function deleteSponsorFile(url) {
 
 loadSponsors();
 
+// ── Persistenta inställningar ───────────────────────────────────────────────
+// Inställningar som ska överleva serverstart och match-nollställning sparas
+// här (t.ex. periodlängd). Liten JSON-fil bredvid sponsors.json.
+const SETTINGS_FILE = path.join(SPONSORS_DATA_DIR, 'settings.json');
+const PERIOD_LENGTH_MIN = 1;
+const PERIOD_LENGTH_MAX = 99;
+
+function clampPeriodLength(n) {
+  const v = parseInt(n, 10);
+  if (!Number.isFinite(v)) return null;
+  return Math.max(PERIOD_LENGTH_MIN, Math.min(PERIOD_LENGTH_MAX, v));
+}
+
+function loadSettings() {
+  ensureSponsorDirs();
+  if (!fs.existsSync(SETTINGS_FILE)) return;
+  try {
+    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const pl = clampPeriodLength(parsed.periodLengthMinutes);
+    if (pl != null) matchState.periodLengthMinutes = pl;
+    const ol = clampPeriodLength(parsed.overtimeLengthMinutes);
+    if (ol != null) matchState.overtimeLengthMinutes = ol;
+  } catch (err) {
+    console.error('[settings] kunde inte läsa:', err.message);
+  }
+}
+
+function saveSettings() {
+  ensureSponsorDirs();
+  const payload = {
+    periodLengthMinutes:   matchState.periodLengthMinutes,
+    overtimeLengthMinutes: matchState.overtimeLengthMinutes
+  };
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[settings] kunde inte spara:', err.message);
+  }
+}
+
+loadSettings();
+
 // Hjälpare – broadcasta hela matchState till alla anslutna klienter.
 const broadcastState = () => io.emit('stateUpdate', matchState);
 
@@ -205,6 +257,10 @@ function formatTime(s) {
 
 function startClock() {
   if (clockInterval) return;
+  // Om vi redan står på (eller över) periodlängden från ett tidigare stopp:
+  // starta inte. Operatören måste nollställa eller justera klockan först,
+  // annars skulle vi ticka över maxtid direkt.
+  if (elapsedSeconds >= periodLimitSeconds()) return;
   matchState.clockRunning = true;
   clockInterval = setInterval(() => {
     elapsedSeconds++;
@@ -215,7 +271,27 @@ function startClock() {
     // pausas utvisningarna automatiskt – det är hela poängen med en
     // gemensam loop.
     tickPenalties();
+
+    // Auto-stopp vid periodlängdens slut (default 20:00). Pausar klockan
+    // och broadcastar clockStatus så kontrollpanelens Start/Stopp-knapp
+    // återgår till "Starta". Stannar på exakt MM:00 så scoreboarden visar
+    // periodens sluttid tills operatören startar nästa.
+    if (elapsedSeconds >= periodLimitSeconds()) {
+      pauseClock();
+      io.emit('clockStatus', { running: false });
+    }
   }, 1000);
+}
+
+function periodLimitSeconds() {
+  // Period 4 = övertid – då gäller övertidsinställningen i stället för
+  // ordinarie periodlängd. Övriga perioder (inkl. straffläggning) följer
+  // ordinarie periodlängd; producenten pausar manuellt vid behov.
+  const isOvertime = matchState.period === 4;
+  const minutes = isOvertime
+    ? (clampPeriodLength(matchState.overtimeLengthMinutes) || 5)
+    : (clampPeriodLength(matchState.periodLengthMinutes)   || 20);
+  return minutes * 60;
 }
 
 // ── Utvisningslogik ──────────────────────────────────────────────────────────
@@ -309,6 +385,11 @@ function resetMatchState() {
   pauseClock();
   stopTimeOut();
   elapsedSeconds = 0;
+  // Periodlängd och övertid är producent-inställningar, inte matchdata –
+  // behåll värdena över nollställning så operatören slipper sätta om dem
+  // inför varje match.
+  const keepPeriodLength   = matchState.periodLengthMinutes   || 20;
+  const keepOvertimeLength = matchState.overtimeLengthMinutes || 5;
   matchState = {
     teamA: 'Lag A',
     teamB: 'Lag B',
@@ -342,7 +423,9 @@ function resetMatchState() {
     syncMatchId: null,
     scoreSyncStatus: null,
     periodSyncMode: 'api',
-    periodSyncStatus: null
+    periodSyncStatus: null,
+    periodLengthMinutes:   keepPeriodLength,
+    overtimeLengthMinutes: keepOvertimeLength
   };
   penaltySeq = 0;
   stopScoreSyncPoll();
@@ -1292,6 +1375,34 @@ io.on('connection', (socket) => {
   // ── Nollställ match (rensa all matchdata) ─────────────────────────────────
   safeOn(socket, 'resetMatchState', () => {
     resetMatchState();
+  });
+
+  // ── Periodlängd ──────────────────────────────────────────────────────────
+  // Sätter hur många minuter en period är – matchklockan stoppas automatiskt
+  // när elapsedSeconds når detta värde. Persisteras till data/settings.json
+  // så att den överlever serverstart. Avvisar tysta värden utanför 1–99.
+  safeOn(socket, 'setPeriodLength', ({ minutes } = {}) => {
+    const m = clampPeriodLength(minutes);
+    if (m == null) return;
+    if (matchState.periodLengthMinutes === m) return;
+    matchState.periodLengthMinutes = m;
+    saveSettings();
+    io.emit('stateUpdate', matchState);
+    console.log(`Periodlängd satt till ${m} min`);
+  });
+
+  // ── Övertid ──────────────────────────────────────────────────────────────
+  // Speglar setPeriodLength men för period 4 (övertid). Samma persistens
+  // och samma 1–99-range. periodLimitSeconds() väljer automatiskt rätt
+  // värde beroende på matchState.period.
+  safeOn(socket, 'setOvertimeLength', ({ minutes } = {}) => {
+    const m = clampPeriodLength(minutes);
+    if (m == null) return;
+    if (matchState.overtimeLengthMinutes === m) return;
+    matchState.overtimeLengthMinutes = m;
+    saveSettings();
+    io.emit('stateUpdate', matchState);
+    console.log(`Övertidslängd satt till ${m} min`);
   });
 
   socket.on('disconnect', () => {
