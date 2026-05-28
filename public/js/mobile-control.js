@@ -17,7 +17,6 @@ const displayScoreB  = document.getElementById('displayScoreB');
 
 const displayClock   = document.getElementById('displayClock');
 const btnStart       = document.getElementById('btnStart');
-const btnPause       = document.getElementById('btnPause');
 const btnReset       = document.getElementById('btnReset');
 const btnClockMinus  = document.getElementById('btnClockMinus');
 const btnClockPlus   = document.getElementById('btnClockPlus');
@@ -35,8 +34,12 @@ const scoreSyncModeEl = document.getElementById('scoreSyncMode');
 const scoreSyncStatus = document.getElementById('scoreSyncStatus');
 const scoreButtons    = document.querySelectorAll('.mc-btn-score');
 
+// Period-synk – read-only display (styrs från control.html)
+const periodSyncModeEl = document.getElementById('periodSyncMode');
+const periodSyncStatus = document.getElementById('periodSyncStatus');
+
 const SYNC_MODE_LABELS = {
-  api:    'Hämta från IBIS',
+  api:    'Hämtas från IBIS',
   manual: 'Hantera manuellt'
 };
 
@@ -63,14 +66,26 @@ socket.on('stateUpdate', (state) => {
   const p = state.period || 1;
   periodDisplay.textContent = p <= 3 ? `Period ${p}` : p === 4 ? 'Övertid' : 'Straffar';
   applyScoreSyncState(state);
+  applyPeriodSyncState(state);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });
 socket.on('clockStatus', ({ running }) => { updateClockButtons(running); });
 
+let clockRunning = false;
 function updateClockButtons(running) {
-  btnStart.disabled = !!running;
-  btnPause.disabled = !running;
+  clockRunning = !!running;
+  if (clockRunning) {
+    btnStart.textContent = 'Stopp';
+    btnStart.classList.remove('mc-btn-start');
+    btnStart.classList.add('mc-btn-pause');
+    btnStart.setAttribute('aria-label', 'Stoppa matchklockan');
+  } else {
+    btnStart.textContent = 'Starta';
+    btnStart.classList.remove('mc-btn-pause');
+    btnStart.classList.add('mc-btn-start');
+    btnStart.setAttribute('aria-label', 'Starta matchklockan');
+  }
 }
 
 // ── Score ────────────────────────────────────────────────────────────────
@@ -84,8 +99,10 @@ document.querySelectorAll('[data-team]').forEach(btn => {
 });
 
 // ── Klocka ───────────────────────────────────────────────────────────────
-btnStart.addEventListener('click', () => socket.emit('clockStart'));
-btnPause.addEventListener('click', () => socket.emit('clockPause'));
+// Toggle: när klockan är stoppad → Starta, när den går → Stopp (pausar).
+btnStart.addEventListener('click', () => {
+  socket.emit(clockRunning ? 'clockPause' : 'clockStart');
+});
 btnReset.addEventListener('click', () => socket.emit('clockReset'));
 btnClockMinus.addEventListener('click', () => socket.emit('clockAdjust', { delta: -1 }));
 btnClockPlus .addEventListener('click', () => socket.emit('clockAdjust', { delta:  1 }));
@@ -210,4 +227,59 @@ function formatSyncClock(ts) {
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
+}
+
+// ── Period-synk (IBIS API vs Manuell) ───────────────────────────────────
+// Read-only spegling från control.html: disabling av Nästa period/Återställ
+// när IBIS-synk är aktiv så att operatören inte tror att knappen gör något.
+let latestPeriodSyncStatus = null;
+let latestPeriodSyncMode   = 'api';
+
+socket.on('periodSyncStatus', (status) => {
+  latestPeriodSyncStatus = status || null;
+  renderPeriodSyncUI();
+});
+
+function applyPeriodSyncState(state) {
+  latestPeriodSyncMode   = state.periodSyncMode === 'manual' ? 'manual' : 'api';
+  latestPeriodSyncStatus = state.periodSyncStatus || latestPeriodSyncStatus;
+  renderPeriodSyncUI();
+}
+
+function renderPeriodSyncUI() {
+  if (periodSyncModeEl) {
+    periodSyncModeEl.textContent = SYNC_MODE_LABELS[latestPeriodSyncMode]
+      || SYNC_MODE_LABELS.api;
+    periodSyncModeEl.dataset.mode = latestPeriodSyncMode;
+  }
+
+  const disable = latestPeriodSyncMode === 'api';
+  [btnPeriodNext, btnPeriodReset].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = disable;
+    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+  });
+
+  if (!periodSyncStatus) return;
+  periodSyncStatus.classList.remove('is-ok', 'is-error');
+  if (latestPeriodSyncMode === 'manual') {
+    periodSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen.';
+    return;
+  }
+  if (!latestSyncMatchId) {
+    periodSyncStatus.textContent = 'Väntar på match från kontrollpanelen.';
+    return;
+  }
+  if (latestPeriodSyncStatus && latestPeriodSyncStatus.ok) {
+    const ts = formatSyncClock(latestPeriodSyncStatus.ts);
+    periodSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    periodSyncStatus.classList.add('is-ok');
+    return;
+  }
+  if (latestPeriodSyncStatus && latestPeriodSyncStatus.error) {
+    periodSyncStatus.textContent = `Synk-fel: ${latestPeriodSyncStatus.error}`;
+    periodSyncStatus.classList.add('is-error');
+    return;
+  }
+  periodSyncStatus.textContent = 'Hämtar från IBIS…';
 }

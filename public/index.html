@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#7DC0F0">
-  <title>FBC Sollentuna Graphic Broadcast – Start</title>
+  <title>FBC Sollentuna Broadcaster</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/icons.css">
   <style>
     :root {
       --sky:           #7DC0F0;
@@ -118,6 +121,13 @@
       font-weight: 700;
       color: var(--dark-blue);
       text-shadow: 0 2px 14px rgba(255, 255, 255, 0.4);
+    }
+    .home-hero-sub {
+      margin-top: 14px;
+      font-size: clamp(1rem, 1.6vw, 1.2rem);
+      font-weight: 400;
+      line-height: 1.45;
+      color: var(--ink-soft);
     }
 
     /* Kortgrid */
@@ -261,6 +271,10 @@
       font-size: 0.95rem;
       transition: transform 0.2s var(--ease-snap), background 0.2s var(--ease);
     }
+    .home-card-cta-arrow .material-symbols-outlined {
+      font-size: 1rem;
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+    }
     .home-card--primary .home-card-cta-arrow {
       background: rgba(125, 192, 240, 0.16);
       border: 1px solid rgba(125, 192, 240, 0.4);
@@ -306,28 +320,24 @@
 </head>
 <body>
 
-  <div class="home-wrap">
-
-    <span class="home-brand">
-      <span class="home-brand-dot" aria-hidden="true"></span>
-      FBC Sollentuna · Graphic Broadcast
-    </span>
+  <main class="home-wrap">
 
     <section class="home-hero">
-      <h1>Vilket verktyg vill du använda?</h1>
+      <h1>FBC Sollentuna Broadcaster</h1>
+      <p class="home-hero-sub">Välj vilket verktyg du vill använda.</p>
     </section>
 
-    <main class="home-grid">
+    <nav class="home-grid" aria-label="Välj verktyg">
 
       <a class="home-card home-card--primary" href="mobile-control.html">
-        <span class="home-card-eyebrow">Liverapportering</span>
-        <div class="home-card-title">Matchrapportering</div>
+        <span class="home-card-eyebrow">Rapporteringsverktyg</span>
+        <div class="home-card-title">Liveuppdatering</div>
         <p class="home-card-desc">
-          Mobil-vy för matchresultat, matchklocka och period. För
-          rapportör eller assistent vid sidlinjen.
+          Mobilanpassad vy för att enbart kunna rapportera matchresultat,
+          matchklocka och period.
         </p>
         <span class="home-card-cta">
-          Öppna <span class="home-card-cta-arrow" aria-hidden="true">→</span>
+          Börja liverapportera <span class="home-card-cta-arrow" aria-hidden="true"><span class="material-symbols-outlined">arrow_forward</span></span>
         </span>
       </a>
 
@@ -335,17 +345,16 @@
         <span class="home-card-eyebrow">Grafikverktyg</span>
         <div class="home-card-title">Kontrollpanelen</div>
         <p class="home-card-desc">
-          Styr grafiken live, hämta data från IBIS, hantera utvisningar,
-          kommentatorer och time-out.
+          Styr och ändra den grafik som visas på livesändningar.
         </p>
         <span class="home-card-cta">
-          Öppna <span class="home-card-cta-arrow" aria-hidden="true">→</span>
+          Hantera grafik <span class="home-card-cta-arrow" aria-hidden="true"><span class="material-symbols-outlined">arrow_forward</span></span>
         </span>
       </a>
 
-    </main>
+    </nav>
 
-  </div>
+  </main>
 
 </body>
 </html>

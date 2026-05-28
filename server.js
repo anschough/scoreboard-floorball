@@ -75,7 +75,13 @@ let matchState = {
   // Senaste status-rapport från pollern – exponeras till UI så vi kan visa
   // "Synkad 14:23:05" / "Fel: …". null = ingen synk-körning ännu.
   //   { ok: boolean, ts: number, error?: string }
-  scoreSyncStatus: null
+  scoreSyncStatus: null,
+  // Period-synk: 'api' (default) = period plockas från IBIS i samma poll-anrop
+  // som scoren, 'manual' = Nästa period/Återställ-knapparna styr. Egen status
+  // så UI:t kan särskilja "perioden synkad just nu" från "scoren synkad".
+  //   periodSyncStatus = { ok: boolean, ts: number, error?: string } | null
+  periodSyncMode: 'api',
+  periodSyncStatus: null
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -334,7 +340,9 @@ function resetMatchState() {
     timeOut: null,
     scoreSyncMode: 'api',
     syncMatchId: null,
-    scoreSyncStatus: null
+    scoreSyncStatus: null,
+    periodSyncMode: 'api',
+    periodSyncStatus: null
   };
   penaltySeq = 0;
   stopScoreSyncPoll();
@@ -371,13 +379,10 @@ function startTimeOut(team) {
     if (!matchState.timeOut) { stopTimeOut(); return; }
     matchState.timeOut.remaining -= 1;
     if (matchState.timeOut.remaining <= 0) {
-      // Auto-avsluta: nolla state, broadcast, och hoppa tillbaka till
-      // scoreboarden så vi inte sitter med en tom time-out-skylt på skärmen.
+      // Auto-avsluta: nolla state, broadcast. Time-outen är numera en overlay
+      // ovanpå scoreboarden så ingen grafik-växling behövs — pillen tonas
+      // bort när matchState.timeOut blir null.
       stopTimeOut();
-      if (graphicState.activeGraphic === 'timeout') {
-        graphicState.activeGraphic = 'scoreboard';
-        io.emit('switchGraphic', { to: 'scoreboard' });
-      }
     } else {
       broadcastTimeOut();
     }
@@ -391,12 +396,13 @@ function stopTimeOut() {
   broadcastTimeOut();
 }
 
-// ── Resultat-synk från IBIS ─────────────────────────────────────────────────
+// ── Resultat- & period-synk från IBIS ──────────────────────────────────────
 // När scoreSyncMode === 'api' och syncMatchId är satt pollar vi
 // matches/{matchId}-endpointen och uppdaterar scoreA/scoreB automatiskt.
 // Pollas frekvent nog för "live"-känsla, men inte så snabbt att IBIS
 // kan tycka det är obehagligt. Innebandy-mål är relativt sällsynta så
 // 15 s är en bra balans.
+// Period plockas från samma response när periodSyncMode === 'api'.
 const SCORE_SYNC_INTERVAL_MS = 15000;
 let scoreSyncInterval = null;
 let scoreSyncInFlight  = false;
@@ -405,9 +411,27 @@ function stopScoreSyncPoll() {
   if (scoreSyncInterval) { clearInterval(scoreSyncInterval); scoreSyncInterval = null; }
 }
 
+// Försöker plocka periodnummer från IBIS-responsen. Innebandyns periodfält har
+// olika namn i olika ändpunkter, så vi provar flera kandidater i tur och ordning.
+// Returnerar 1-5 eller null om inget hittas/parsas till siffra.
+function extractPeriodFromIbis(data) {
+  if (!data) return null;
+  const candidates = [
+    data.Period, data.CurrentPeriod, data.PeriodNumber, data.MatchPeriod,
+    data.PeriodNo, data.Halftime
+  ];
+  for (const c of candidates) {
+    if (c == null) continue;
+    const n = parseInt(c, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
+  }
+  return null;
+}
+
 async function pollScoreOnce() {
   if (scoreSyncInFlight) return;          // skydda mot överlappande requests
-  if (matchState.scoreSyncMode !== 'api') return;
+  // En poll räcker så länge minst ett av syncmodes är aktivt
+  if (matchState.scoreSyncMode !== 'api' && matchState.periodSyncMode !== 'api') return;
   const matchId = matchState.syncMatchId;
   if (!matchId) return;
   scoreSyncInFlight = true;
@@ -415,26 +439,52 @@ async function pollScoreOnce() {
     const { apiRoot, headers } = await getInnebandyAuth();
     const { data } = await axios.get(`${apiRoot}matches/${matchId}`,
       { timeout: 10000, headers });
-    const home = (data && data.GoalsHomeTeam != null) ? parseInt(data.GoalsHomeTeam, 10) : null;
-    const away = (data && data.GoalsAwayTeam != null) ? parseInt(data.GoalsAwayTeam, 10) : null;
     let changed = false;
-    if (Number.isFinite(home) && home !== matchState.scoreA) {
-      matchState.scoreA = home; changed = true;
+
+    if (matchState.scoreSyncMode === 'api') {
+      const home = (data && data.GoalsHomeTeam != null) ? parseInt(data.GoalsHomeTeam, 10) : null;
+      const away = (data && data.GoalsAwayTeam != null) ? parseInt(data.GoalsAwayTeam, 10) : null;
+      if (Number.isFinite(home) && home !== matchState.scoreA) {
+        matchState.scoreA = home; changed = true;
+      }
+      if (Number.isFinite(away) && away !== matchState.scoreB) {
+        matchState.scoreB = away; changed = true;
+      }
+      matchState.scoreSyncStatus = { ok: true, ts: Date.now() };
     }
-    if (Number.isFinite(away) && away !== matchState.scoreB) {
-      matchState.scoreB = away; changed = true;
+
+    if (matchState.periodSyncMode === 'api') {
+      const p = extractPeriodFromIbis(data);
+      if (p != null) {
+        if (p !== matchState.period) { matchState.period = p; changed = true; }
+        matchState.periodSyncStatus = { ok: true, ts: Date.now() };
+      } else {
+        matchState.periodSyncStatus = {
+          ok: false, ts: Date.now(),
+          error: 'IBIS-svaret innehöll inget periodfält'
+        };
+      }
     }
-    matchState.scoreSyncStatus = { ok: true, ts: Date.now() };
+
     if (changed) io.emit('stateUpdate', matchState);
-    else io.emit('scoreSyncStatus', matchState.scoreSyncStatus);
+    else {
+      if (matchState.scoreSyncMode === 'api') io.emit('scoreSyncStatus', matchState.scoreSyncStatus);
+      if (matchState.periodSyncMode === 'api') io.emit('periodSyncStatus', matchState.periodSyncStatus);
+    }
   } catch (err) {
-    matchState.scoreSyncStatus = {
-      ok: false,
-      ts: Date.now(),
+    const errStatus = {
+      ok: false, ts: Date.now(),
       error: (err && err.message) || 'Okänt fel'
     };
-    io.emit('scoreSyncStatus', matchState.scoreSyncStatus);
-    console.warn('[score-sync] fel:', err.message);
+    if (matchState.scoreSyncMode === 'api') {
+      matchState.scoreSyncStatus = errStatus;
+      io.emit('scoreSyncStatus', errStatus);
+    }
+    if (matchState.periodSyncMode === 'api') {
+      matchState.periodSyncStatus = errStatus;
+      io.emit('periodSyncStatus', errStatus);
+    }
+    console.warn('[ibis-sync] fel:', err.message);
   } finally {
     scoreSyncInFlight = false;
   }
@@ -442,7 +492,8 @@ async function pollScoreOnce() {
 
 function startScoreSyncPoll() {
   stopScoreSyncPoll();
-  if (matchState.scoreSyncMode !== 'api') return;
+  // Pollen körs så länge minst ett av syncmodes är 'api'
+  if (matchState.scoreSyncMode !== 'api' && matchState.periodSyncMode !== 'api') return;
   if (!matchState.syncMatchId) return;
   // Hämta direkt så vi inte väntar i 15 s innan första värdet
   pollScoreOnce();
@@ -1019,8 +1070,21 @@ io.on('connection', (socket) => {
     const next = mode === 'manual' ? 'manual' : 'api';
     if (matchState.scoreSyncMode === next) return;
     matchState.scoreSyncMode = next;
-    if (next === 'api') startScoreSyncPoll();
-    else                stopScoreSyncPoll();
+    // Pollen körs så länge minst en av score/period är i api-mode.
+    if (next === 'api' || matchState.periodSyncMode === 'api') startScoreSyncPoll();
+    else                                                       stopScoreSyncPoll();
+    io.emit('stateUpdate', matchState);
+  });
+
+  // Växla mellan IBIS-synk och manuell hantering av period. Samma mönster som
+  // score-synken — manuella period-knappar blockeras i 'api'-mode så att
+  // nästa IBIS-poll inte skriver över.
+  safeOn(socket, 'setPeriodSyncMode', ({ mode } = {}) => {
+    const next = mode === 'manual' ? 'manual' : 'api';
+    if (matchState.periodSyncMode === next) return;
+    matchState.periodSyncMode = next;
+    if (next === 'api' || matchState.scoreSyncMode === 'api') startScoreSyncPoll();
+    else                                                      stopScoreSyncPoll();
     io.emit('stateUpdate', matchState);
   });
 
@@ -1040,12 +1104,16 @@ io.on('connection', (socket) => {
     setClockSeconds(s);
   });
 
-  // Period via socket (HTTP-rutter finns också för Stream Deck)
+  // Period via socket (HTTP-rutter finns också för Stream Deck).
+  // Blockeras när IBIS-synk styr perioden, annars skulle nästa poll
+  // skriva över ändringen → flicker.
   safeOn(socket, 'periodNext', () => {
+    if (matchState.periodSyncMode === 'api') return;
     matchState.period = Math.min(5, (matchState.period || 1) + 1);
     io.emit('stateUpdate', matchState);
   });
   safeOn(socket, 'periodReset', () => {
+    if (matchState.periodSyncMode === 'api') return;
     matchState.period = 1;
     io.emit('stateUpdate', matchState);
   });
@@ -1149,7 +1217,7 @@ io.on('connection', (socket) => {
     const target = to === 'clear' ? 'none' : to;
     const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
                      'commentators', 'matchup', 'intermission', 'playerLowerThird',
-                     'preGameStats', 'timeout', 'none'];
+                     'preGameStats', 'none'];
     if (!allowed.includes(target)) return;
     graphicState.activeGraphic = target;
     io.emit('switchGraphic', { to: target });
@@ -1479,7 +1547,7 @@ app.get('/api/graphic/commentators/toggle', (_req, res) => {
 app.get('/api/graphic/:target', (req, res) => {
   const allowed = ['scoreboard', 'lineupHome', 'lineupAway', 'table', 'fixtures',
                    'commentators', 'matchup', 'intermission', 'preGameStats',
-                   'timeout', 'clear'];
+                   'clear'];
   const target  = req.params.target;
   if (!allowed.includes(target)) {
     return res.status(400).json({ success: false, error: `Okänd grafik: ${target}` });
@@ -1537,13 +1605,6 @@ app.get('/api/graphic/:target', (req, res) => {
       error: 'Ingen statistik inför match lagrad. Hämta en match i kontrollpanelen först.'
     });
   }
-  if (to === 'timeout' && !matchState.timeOut) {
-    return res.status(400).json({
-      success: false,
-      error: 'Ingen time-out aktiv. Starta en time-out i kontrollpanelen först.'
-    });
-  }
-
   graphicState.activeGraphic = to;
   io.emit('switchGraphic', { to });
   // Defense in depth: pusha även färsk state så ev. klienter med stale data
@@ -1557,12 +1618,24 @@ app.get('/api/graphic/:target', (req, res) => {
 // Floorball: 1, 2, 3 = ordinarie perioder, 4 = övertid (ÖT), 5 = straffläggning.
 // /next stegar uppåt och kapar vid 5. /reset hoppar tillbaka till 1.
 app.get('/api/period/next', (_req, res) => {
+  if (matchState.periodSyncMode === 'api') {
+    return res.status(409).json({
+      success: false,
+      error: 'Period-synk är i IBIS-läge — växla till manuell för att stega period.'
+    });
+  }
   matchState.period = Math.min(5, (matchState.period || 1) + 1);
   broadcastState();
   res.json({ success: true, period: matchState.period });
 });
 
 app.get('/api/period/reset', (_req, res) => {
+  if (matchState.periodSyncMode === 'api') {
+    return res.status(409).json({
+      success: false,
+      error: 'Period-synk är i IBIS-läge — växla till manuell för att återställa period.'
+    });
+  }
   matchState.period = 1;
   broadcastState();
   res.json({ success: true, period: 1 });

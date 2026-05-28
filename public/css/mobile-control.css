@@ -84,20 +84,28 @@ button:focus-visible,
   gap: var(--gap);
 }
 
+/* 3-kolumners grid: vänster spacer (samma bredd som status-pillen via 1fr)
+   så h1 alltid hamnar exakt i mitten av raden. Samma mönster som control.html
+   och settings.html. */
 .mc-topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 4px 2px 0;
 }
+.mc-topbar-spacer { display: block; }
 .mc-title {
+  grid-column: 2;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text);
+  text-align: center;
 }
 .mc-status {
+  grid-column: 3;
+  justify-self: end;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -271,9 +279,10 @@ button:focus-visible,
   margin: 4px 0 14px;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
-.mc-clock-main { grid-template-columns: 1fr 1fr 1fr; }
+.mc-clock-main { grid-template-columns: 1fr; }
 .mc-clock-adjust { grid-template-columns: 1fr 1fr; margin-top: 8px; }
 .mc-clock-set { grid-template-columns: 1fr auto; margin-top: 8px; }
+.mc-clock-reset { grid-template-columns: 1fr; margin-top: 8px; }
 
 .mc-btn {
   height: 52px;

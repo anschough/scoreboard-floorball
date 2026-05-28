@@ -12,6 +12,8 @@ const mixerBtns  = document.querySelectorAll('.mixer-btn');
 // Resultat-synk-toggle
 const scoreSyncBtns   = document.querySelectorAll('.score-sync-btn');
 const scoreSyncStatus = document.getElementById('scoreSyncStatus');
+const periodSyncBtns   = document.querySelectorAll('.period-sync-btn');
+const periodSyncStatus = document.getElementById('periodSyncStatus');
 const scoreButtons    = document.querySelectorAll('.btn-score-xl');
 
 // Flik 1 – Scoreboard
@@ -26,7 +28,6 @@ const displayScoreA  = document.getElementById('displayScoreA');
 const displayScoreB  = document.getElementById('displayScoreB');
 const displayClock   = document.getElementById('displayClock');
 const btnStart       = document.getElementById('btnStart');
-const btnPause       = document.getElementById('btnPause');
 const btnReset       = document.getElementById('btnReset');
 const btnToggleClock = document.getElementById('btnToggleClock');
 
@@ -171,7 +172,7 @@ function renderPenaltyList(listEl, penalties) {
       li.innerHTML = `
         <span class="penalty-row-jersey"></span>
         <span class="penalty-row-time"></span>
-        <button class="btn-penalty-remove" title="Ta bort utvisning" aria-label="Ta bort utvisning">×</button>`;
+        <button class="btn-penalty-remove" title="Ta bort utvisning" aria-label="Ta bort utvisning"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>`;
       listEl.appendChild(li);
     }
     const isQueued = p.status === 'queued';
@@ -404,14 +405,27 @@ socket.on('stateUpdate', (state) => {
 
   // Resultat-synk – toggle-status + score-knapp-disable
   applyScoreSyncState(state);
+  // Period-synk – toggle-status + period-knapp-disable
+  applyPeriodSyncState(state);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });
 socket.on('clockStatus', ({ running }) => { updateClockButtons(running); });
 
+let clockRunning = false;
 function updateClockButtons(running) {
-  btnStart.disabled = running;
-  btnPause.disabled = !running;
+  clockRunning = !!running;
+  if (clockRunning) {
+    btnStart.textContent = 'Stopp';
+    btnStart.classList.remove('btn-start');
+    btnStart.classList.add('btn-pause');
+    btnStart.setAttribute('aria-label', 'Stoppa matchklockan');
+  } else {
+    btnStart.textContent = 'Starta';
+    btnStart.classList.remove('btn-pause');
+    btnStart.classList.add('btn-start');
+    btnStart.setAttribute('aria-label', 'Starta matchklockan');
+  }
 }
 
 /** graphicState – återställ indikator vid anslutning/sidladdning */
@@ -460,7 +474,7 @@ function renderScoreSyncUI() {
   scoreSyncBtns.forEach(btn => {
     const active = btn.dataset.mode === latestScoreSyncMode;
     btn.classList.toggle('is-active', active);
-    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
 
   // Inaktivera +/− i API-mode (även när ingen match är hämtad – då finns
@@ -482,7 +496,7 @@ function renderScoreSyncUI() {
     return;
   }
   if (!latestSyncMatchId) {
-    scoreSyncStatus.textContent = 'Hämta en match från IBIS för att starta synken.';
+    scoreSyncStatus.textContent = 'Hämta data från IBIS för att starta synkronisering av matchresultat.';
     return;
   }
   if (latestScoreSyncStatus && latestScoreSyncStatus.ok) {
@@ -498,6 +512,76 @@ function renderScoreSyncUI() {
   }
   scoreSyncStatus.textContent = 'Hämtar från Innebandy API…';
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PERIOD-SYNK (Innebandy API vs Manuell)
+// ════════════════════════════════════════════════════════════════════════════
+// Speglar score-synken: 'api' = perioden plockas från IBIS (samma poll som
+// score), 'manual' = Nästa period/Återställ styr. I api-mode disablas knapparna.
+
+let latestPeriodSyncStatus = null;
+let latestPeriodSyncMode   = 'api';
+
+periodSyncBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.mode;
+    if (mode !== 'api' && mode !== 'manual') return;
+    if (mode === latestPeriodSyncMode) return;
+    socket.emit('setPeriodSyncMode', { mode });
+  });
+});
+
+socket.on('periodSyncStatus', (status) => {
+  latestPeriodSyncStatus = status || null;
+  renderPeriodSyncUI();
+});
+
+function applyPeriodSyncState(state) {
+  latestPeriodSyncMode   = state.periodSyncMode === 'manual' ? 'manual' : 'api';
+  latestPeriodSyncStatus = state.periodSyncStatus || latestPeriodSyncStatus;
+  renderPeriodSyncUI();
+}
+
+function renderPeriodSyncUI() {
+  periodSyncBtns.forEach(btn => {
+    const active = btn.dataset.mode === latestPeriodSyncMode;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  // I api-mode blockerar servern manuella periodbyten ändå — disabling
+  // av knapparna ger ett synligt och åtkomstvänligt skydd.
+  const disable = latestPeriodSyncMode === 'api';
+  [btnPeriodNext, btnPeriodReset].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = disable;
+    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+  });
+
+  if (!periodSyncStatus) return;
+  periodSyncStatus.classList.remove('is-ok', 'is-error');
+  if (latestPeriodSyncMode === 'manual') {
+    periodSyncStatus.textContent = 'Manuell hantering – använd Nästa period/Återställ.';
+    return;
+  }
+  if (!latestSyncMatchId) {
+    periodSyncStatus.textContent = 'Hämta data från IBIS för att starta synkronisering av period.';
+    return;
+  }
+  if (latestPeriodSyncStatus && latestPeriodSyncStatus.ok) {
+    const ts = formatSyncClock(latestPeriodSyncStatus.ts);
+    periodSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    periodSyncStatus.classList.add('is-ok');
+    return;
+  }
+  if (latestPeriodSyncStatus && latestPeriodSyncStatus.error) {
+    periodSyncStatus.textContent = `Synk-fel: ${latestPeriodSyncStatus.error}`;
+    periodSyncStatus.classList.add('is-error');
+    return;
+  }
+  periodSyncStatus.textContent = 'Hämtar från Innebandy API…';
+}
+
 
 function formatSyncClock(ts) {
   const d = new Date(ts);
@@ -533,8 +617,10 @@ document.querySelectorAll('[data-team]').forEach(btn => {
   });
 });
 
-btnStart.addEventListener('click', () => socket.emit('clockStart'));
-btnPause.addEventListener('click', () => socket.emit('clockPause'));
+// Toggle: när klockan är stoppad → Starta, när den går → Stopp (pausar).
+btnStart.addEventListener('click', () => {
+  socket.emit(clockRunning ? 'clockPause' : 'clockStart');
+});
 btnReset.addEventListener('click', () => socket.emit('clockReset'));
 btnToggleClock.addEventListener('click', () => socket.emit('toggleClockVisibility'));
 

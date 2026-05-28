@@ -3,20 +3,35 @@
    Bygger ovanpå control.css design tokens (knappar, kort, palett).
 ═══ */
 
-/* ── Verktygsrad (Lägg till + räknare) ──────────────────────────────────── */
-.sponsor-toolbar {
+/* ── Aktionsrad nere i kortet: Lägg till + Spara ändringar ─────────────── */
+/* "Lägg till" är <label>-knapp (kopplad till dolt file-input), "Spara ändringar"
+   är primär CTA. På desktop höger-justerade i en rad. På smal skärm staplas
+   de med Spara överst (primär action får mest plats). */
+.sponsor-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.sponsor-actions-buttons {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
+.sponsor-actions .fetch-status:empty { display: none; }
 
 .sponsor-add-btn {
-  /* Renderas som <label> men ska se ut som .btn-primary */
-  display: inline-block;
+  /* Renderas som <label> men ska se ut som .btn-secondary. Den globala
+     label-stilen sätter uppercase + muted färg + tunn font — vi nollställer
+     de bitarna så .btn / .btn-secondary får styra utseendet. */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
+  text-transform: none;
 }
+.sponsor-add-btn .material-symbols-outlined { font-size: 1.2rem; }
 
 .sponsor-file-input {
   position: absolute;
@@ -30,13 +45,44 @@
   border: 0;
 }
 
-.sponsor-count {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
+/* Sponsor-kortet behöver position:relative så badgen kan ankra sig mot kortets
+   övre kant. Scoped via :has() så vi inte ändrar position på andra dash-cards. */
+.dash-card:has(.sponsor-count-badge) {
+  position: relative;
 }
-.sponsor-count.sponsor-count-full { color: var(--err); }
+
+.sponsor-card-header {
+  margin-bottom: 6px;
+}
+
+/* Badge sitter på boxens översta linje (halva utanför, halva innanför) i
+   övre högra hörnet. Solid grön när det finns plats för fler, solid röd
+   vid max. Vit text på båda för god kontrast (WCAG AA). */
+.sponsor-count-badge {
+  position: absolute;
+  top: -13px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: #16a34a;
+  color: #fff;
+  border: 1px solid #15803d;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+  transition: background 0.18s var(--ease-out),
+              border-color 0.18s var(--ease-out);
+}
+.sponsor-count-badge.sponsor-count-full {
+  background: var(--err-bg);
+  border-color: #991b1b;
+}
+
 
 
 /* ── Logotype-lista ─────────────────────────────────────────────────────── */
@@ -51,6 +97,7 @@
 .sponsor-list:not(:empty) ~ .scroll-empty { display: none; }
 
 .sponsor-card {
+  position: relative;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -58,9 +105,39 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 0.15s, background 0.15s;
+  cursor: grab;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s, opacity 0.15s;
 }
 .sponsor-card:hover { border-color: var(--border-strong); }
+.sponsor-card:active { cursor: grabbing; }
+
+/* Dragging-state: kortet följer muspekaren och tonas ner i listan. */
+.sponsor-card.is-dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+/* Drop-target: visa tydligt var släpp landar. */
+.sponsor-card.is-drop-target {
+  border-color: var(--accent-hi);
+  background: rgba(var(--lb-500-rgb), 0.14);
+  transform: translateY(-2px);
+}
+
+/* Drag-handle — fyrpunkts-ikon i hörnet av kortet. Inte interaktiv för
+   tangentbord (knappraden gör samma jobb), men hjälper med affordance. */
+.sponsor-card-handle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--text-muted);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+.sponsor-card:hover .sponsor-card-handle { opacity: 0.9; }
+.sponsor-card-handle .material-symbols-outlined { font-size: 1.1rem; }
 
 .sponsor-card-preview {
   background:
@@ -108,7 +185,11 @@
   font-weight: 700;
   cursor: pointer;
   transition: all 0.12s var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+.sponsor-action .material-symbols-outlined { font-size: 1.1rem; }
 .sponsor-action:hover:not(:disabled) {
   background: var(--accent);
   color: var(--sollentuna-dark-blue);
@@ -125,7 +206,11 @@
   background: rgba(255, 107, 107, 0.08);
   padding: 6px 10px;
 }
-.sponsor-action-remove:hover {
+/* :not(:disabled) ger samma specificitet som .sponsor-action:hover:not(:disabled)
+   så att vår rödare hover/active vinner i kaskaden (senare definierad). Utan
+   detta byter knappen färg till accent-blå vid hover via den generiska regeln. */
+.sponsor-action-remove:hover:not(:disabled),
+.sponsor-action-remove:active:not(:disabled) {
   background: var(--err-bg);
   color: #fff;
   border-color: var(--err-bg);
@@ -133,16 +218,26 @@
 
 
 /* ── Spara-rad + statusmeddelande ──────────────────────────────────────── */
-.sponsor-save-row {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* På desktop: Spara-knappen är tydlig men inte hela radens bredd. */
+.sponsor-save-btn {
+  min-width: 200px;
 }
 
-/* Återanvänder .fetch-status (loading/ok/error) från control.css.
-   Dölj när den är tom så raden inte tar onödig plats. */
-.sponsor-save-row .fetch-status:empty { display: none; }
+/* På smal skärm: aktionerna fyller hela bredden och staplas så Spara
+   ändringar hamnar överst (primär action får visuellt företräde). */
+@media (max-width: 720px) {
+  .sponsor-actions { align-items: stretch; }
+  .sponsor-actions-buttons {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .sponsor-add-btn,
+  .sponsor-save-btn {
+    width: 100%;
+    justify-content: center;
+    min-width: 0;
+  }
+}
 
 
 /* ══════════════════════════════════════════════════════════════════════════
