@@ -23,7 +23,7 @@
           <span id="connection-status" class="status disconnected"
                 role="status" aria-live="polite">Ansluter…</span>
           <a href="graphics.html" target="_blank" rel="noopener" class="header-btn header-btn-graphics"
-             title="Öppna grafik-lagret i en ny flik (för förhandsvisning eller OBS Browser Source-test)">
+             title="Öppna grafiken i ny flik (för OBS Browser Source)">
             Öppna grafik<span class="visually-hidden"> (öppnas i ny flik)</span>
           </a>
           <a href="settings.html" target="_blank" rel="noopener" class="header-btn"
@@ -35,18 +35,18 @@
 
       <!-- Bildmixer – direktväxling mellan grafiker -->
       <div class="mixer-wrap">
-        <span class="mixer-label">Välj vad som ska visas på skärmen</span>
+        <span class="mixer-label">Vad ska visas live just nu?</span>
         <nav class="mixer-bar" aria-label="Grafik-mixer">
           <button class="mixer-btn mixer-btn-clear" data-graphic="clear" aria-pressed="false" title="Göm alla grafiker">Dölj all grafik</button>
-          <button class="mixer-btn" data-graphic="matchup"      aria-pressed="false" title="Visa inför/paus-skylten live">Inför match</button>
+          <button class="mixer-btn" data-graphic="matchup"      aria-pressed="false" title="Visa matchup-grafiken live (inför match & paus)">Inför match</button>
           <button class="mixer-btn" data-graphic="commentators" aria-pressed="false" title="Visa kommentator-skylten live">Kommentatorer</button>
           <button class="mixer-btn" data-graphic="scoreboard"   aria-pressed="false" title="Visa scoreboard live">Scoreboard</button>
-          <button class="mixer-btn" data-graphic="lineupHome"   aria-pressed="false" title="Visa hemmalagets uppställning live">Hemma Lineup</button>
-          <button class="mixer-btn" data-graphic="lineupAway"   aria-pressed="false" title="Visa bortalagets uppställning live">Borta Lineup</button>
+          <button class="mixer-btn" data-graphic="lineupHome"   aria-pressed="false" title="Visa hemmalagets uppställning live">Hemma uppställning</button>
+          <button class="mixer-btn" data-graphic="lineupAway"   aria-pressed="false" title="Visa bortalagets uppställning live">Borta uppställning</button>
           <button class="mixer-btn" data-graphic="table"        aria-pressed="false" title="Visa serietabellen live">Tabell</button>
-          <button class="mixer-btn" data-graphic="fixtures"     aria-pressed="false" title="Visa omgångens matcher live">Omgång</button>
-          <button class="mixer-btn" data-graphic="preGameStats" aria-pressed="false" title="Visa statistik inför match live">Stats inför match</button>
-          <button class="mixer-btn" data-graphic="intermission" aria-pressed="false" title="Visa pausvila-skylten live (räknar ut nästa period)">Pausvila</button>
+          <button class="mixer-btn" data-graphic="fixtures"     aria-pressed="false" title="Visa omgångens matcher live">Omgångens matcher</button>
+          <button class="mixer-btn" data-graphic="preGameStats" aria-pressed="false" title="Visa statistik inför match live">Statistik inför match</button>
+          <button class="mixer-btn" data-graphic="intermission" aria-pressed="false" title="Visa pausgrafiken live (räknar ner till nästa period)">Pausvila</button>
           <button class="mixer-btn" data-graphic="timeout"      aria-pressed="false" title="Visa time-out-grafiken live (kräver att en time-out är startad)">Time-out</button>
         </nav>
       </div>
@@ -75,6 +75,17 @@
           </div>
           <div id="fetchStatusAll" class="fetch-status"
                role="status" aria-live="polite"></div>
+        </article>
+
+        <article class="dash-card">
+          <h2>Nollställ match</h2>
+          <p class="card-hint">
+            Tömmer lagnamn, poäng, klocka, period, uppställningar, tabell, omgång,
+            kommentatorer och spelplats. Använd mellan matcher.
+          </p>
+          <button id="btnResetMatch" class="btn btn-danger full-width">
+            Rensa all matchdata
+          </button>
         </article>
 
         <article class="dash-card">
@@ -108,11 +119,11 @@
           <div class="form-grid-2">
             <div class="input-group">
               <label for="inputCommentator1">Kommentator 1</label>
-              <input type="text" id="inputCommentator1" placeholder="Ange namn här..." maxlength="40">
+              <input type="text" id="inputCommentator1" placeholder="Skriv namn här..." maxlength="40">
             </div>
             <div class="input-group">
               <label for="inputCommentator2">Kommentator 2</label>
-              <input type="text" id="inputCommentator2" placeholder="Ange namn här..." maxlength="40">
+              <input type="text" id="inputCommentator2" placeholder="Skriv namn här..." maxlength="40">
             </div>
           </div>
           <button id="btnSaveCommentators" class="btn btn-primary full-width">Spara kommentatorer</button>
@@ -122,20 +133,9 @@
           <h2>Spelplats</h2>
           <div class="url-row">
             <input type="text" id="inputVenue" class="input-url"
-                   placeholder="Ange spelplats här..." maxlength="60">
+                   placeholder="Skriv spelplats här..." maxlength="60">
             <button id="btnSaveVenue" class="btn btn-primary">Spara</button>
           </div>
-        </article>
-
-        <article class="dash-card">
-          <h2>Nollställ match</h2>
-          <p class="card-hint">
-            Tömmer lagnamn, poäng, klocka, period, uppställningar, tabell, omgång,
-            kommentatorer och spelplats. Använd mellan matcher.
-          </p>
-          <button id="btnResetMatch" class="btn btn-danger full-width">
-            Rensa all matchdata
-          </button>
         </article>
 
       </section>
@@ -174,7 +174,7 @@
           <div class="clock-display-xl" id="displayClock">00:00</div>
           <div class="clock-controls-xl">
             <button id="btnStart" class="btn-clock-xl btn-start">Start</button>
-            <button id="btnPause" class="btn-clock-xl btn-pause" disabled>Stop</button>
+            <button id="btnPause" class="btn-clock-xl btn-pause" disabled>Pausa</button>
             <button id="btnReset" class="btn-clock-xl btn-reset">Återställ</button>
           </div>
           <div class="clock-adjust-row" role="group" aria-label="Justera matchtid manuellt">
@@ -186,7 +186,7 @@
                    aria-describedby="inputClockSetHint">
             <button id="btnClockSet" class="btn-clock-set" title="Justera tid från fältet">Justera tid</button>
           </div>
-          <span id="inputClockSetHint" class="visually-hidden">Format MM:SS, exempelvis 12:30. Sekunder mellan 00 och 59.</span>
+          <span id="inputClockSetHint" class="visually-hidden">Skriv tiden som 12:30 eller 1230. Sekunder mellan 00 och 59.</span>
           <button id="btnToggleClock" class="btn btn-secondary full-width">Dölj klockan</button>
         </article>
 
@@ -211,8 +211,8 @@
             <span class="timeout-status-empty">Ingen aktiv time-out</span>
           </div>
           <div class="timeout-buttons">
-            <button id="btnTimeOutHome"   class="btn btn-primary"   data-team="home">Hemma time-out</button>
-            <button id="btnTimeOutAway"   class="btn btn-primary"   data-team="away">Borta time-out</button>
+            <button id="btnTimeOutHome"   class="btn btn-primary"   data-team="home">Starta för hemma</button>
+            <button id="btnTimeOutAway"   class="btn btn-primary"   data-team="away">Starta för borta</button>
             <button id="btnTimeOutClear"  class="btn btn-secondary" disabled>Avsluta</button>
           </div>
         </article>
@@ -233,10 +233,10 @@
                 <input type="text" id="inputPenaltyHomeJersey"
                        class="penalty-jersey" placeholder="#"
                        maxlength="3" aria-label="Tröjnummer hemma">
-                <button class="btn-penalty btn-penalty-2" data-team="home" data-minutes="2">2 Min</button>
+                <button class="btn-penalty btn-penalty-2" data-team="home" data-minutes="2">2 min</button>
                 <button class="btn-penalty btn-penalty-22" data-team="home" data-kind="double"
-                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 Min</button>
-                <button class="btn-penalty btn-penalty-5" data-team="home" data-minutes="5">5 Min</button>
+                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="home" data-minutes="5">5 min</button>
               </div>
               <ul class="penalty-list" id="penaltyHomeList"
                   aria-label="Aktiva utvisningar – Hemma"></ul>
@@ -250,10 +250,10 @@
                 <input type="text" id="inputPenaltyAwayJersey"
                        class="penalty-jersey" placeholder="#"
                        maxlength="3" aria-label="Tröjnummer borta">
-                <button class="btn-penalty btn-penalty-2" data-team="away" data-minutes="2">2 Min</button>
+                <button class="btn-penalty btn-penalty-2" data-team="away" data-minutes="2">2 min</button>
                 <button class="btn-penalty btn-penalty-22" data-team="away" data-kind="double"
-                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 Min</button>
-                <button class="btn-penalty btn-penalty-5" data-team="away" data-minutes="5">5 Min</button>
+                        title="2+2: lägger två 2-min där andra startar när första går ut">2+2 min</button>
+                <button class="btn-penalty btn-penalty-5" data-team="away" data-minutes="5">5 min</button>
               </div>
               <ul class="penalty-list" id="penaltyAwayList"
                   aria-label="Aktiva utvisningar – Borta"></ul>
@@ -272,7 +272,7 @@
         <article class="dash-card scroll-card">
           <h2>Laguppställningar</h2>
           <p class="card-hint">
-            Klicka på namnet för att visa en grafik när intervjuer genomförs.
+            Klicka på en spelare för att visa intervjugrafiken live.
           </p>
           <div class="scroll-body">
             <div id="previewInnebandyLineup" class="ib-lineup-grid" hidden>
@@ -288,7 +288,7 @@
                   <div id="previewIbHomeLeadersList" class="preview-list ib-single-col"></div>
                 </div>
                 <button id="btnSendIbHome" class="btn btn-send full-width">
-                  Visa Hemma live
+                  Visa hemma live
                 </button>
               </div>
               <div class="preview-box">
@@ -303,7 +303,7 @@
                   <div id="previewIbAwayLeadersList" class="preview-list ib-single-col"></div>
                 </div>
                 <button id="btnSendIbAway" class="btn btn-send full-width">
-                  Visa Borta live
+                  Visa borta live
                 </button>
               </div>
             </div>
@@ -329,7 +329,7 @@
                 </table>
               </div>
               <button id="btnSendInnebandyTable" class="btn btn-send full-width">
-                Visa Tabell live
+                Visa tabellen live
               </button>
             </div>
             <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
@@ -356,7 +356,7 @@
                 <tbody id="pgPreviewBody"></tbody>
               </table>
               <button id="btnSendPreGame" class="btn btn-send full-width">
-                Visa Statistik inför match live
+                Visa statistik live
               </button>
             </div>
             <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
@@ -374,7 +374,7 @@
               </div>
               <div id="previewFixturesList" class="preview-fixtures-list"></div>
               <button id="btnSendFixtures" class="btn btn-send full-width">
-                Visa Omgångens Matcher live
+                Visa omgångens matcher live
               </button>
             </div>
             <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>

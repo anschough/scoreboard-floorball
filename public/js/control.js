@@ -342,12 +342,12 @@ function updateActiveIndicator(key) {
 // SOCKET – ANSLUTNING
 // ════════════════════════════════════════════════════════════════════════════
 socket.on('connect', () => {
-  statusEl.textContent = 'Server ansluten';
+  statusEl.textContent = 'Ansluten';
   statusEl.className   = 'status connected';
 });
 
 socket.on('disconnect', () => {
-  statusEl.textContent = 'Servern frånkopplad';
+  statusEl.textContent = 'Frånkopplad';
   statusEl.className   = 'status disconnected';
 });
 
@@ -456,11 +456,23 @@ const inputClockSet = document.getElementById('inputClockSet');
 btnClockMinus.addEventListener('click', () => socket.emit('clockAdjust', { delta: -1 }));
 btnClockPlus .addEventListener('click', () => socket.emit('clockAdjust', { delta:  1 }));
 
-/** Parse "MM:SS" eller "M:SS" → totala sekunder. Returnerar null vid ogiltigt. */
+/** Parse matchtid → totala sekunder. Accepterar två format:
+ *    "MM:SS" / "M:SS"  (med kolon)   → t.ex. "14:27", "1:27"
+ *    "MMSS"  / "MSS"   (utan kolon)  → t.ex. "1427", "127" (sista 2 siffror = sek)
+ *  Returnerar null vid ogiltigt format eller sekunder > 59. */
 function parseMMSS(value) {
-  const m = (value || '').trim().match(/^(\d{1,2}):([0-5]?\d)$/);
-  if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  const v = (value || '').trim();
+  // Kolon-format: 1–2 minuter, 1–2 sekunder (sek 00–59)
+  const colon = v.match(/^(\d{1,2}):([0-5]?\d)$/);
+  if (colon) return parseInt(colon[1], 10) * 60 + parseInt(colon[2], 10);
+  // Sifferformat: 3–4 siffror, sista 2 = sekunder, resterande = minuter
+  const digits = v.match(/^(\d{1,2})(\d{2})$/);
+  if (digits) {
+    const sec = parseInt(digits[2], 10);
+    if (sec > 59) return null;
+    return parseInt(digits[1], 10) * 60 + sec;
+  }
+  return null;
 }
 
 // Behåller standard-hjälptexten så vi kan återställa den efter ett fel.
@@ -477,7 +489,7 @@ function applyClockSet() {
     inputClockSet.setAttribute('aria-invalid', 'true');
     if (inputClockSetHint) {
       inputClockSetHint.textContent =
-        'Ogiltigt format. Skriv tiden som MM:SS, exempelvis 12:30.';
+        'Ogiltigt format. Skriv tiden som 12:30 eller 1230.';
     }
     inputClockSet.focus();
     inputClockSet.select();
@@ -892,7 +904,7 @@ function triggerFetchAll() {
   const url = urlMatchAll.value.trim();
   if (!url) return;
   // Laddningsindikator: status + göm gamla previews + disabled-knapp
-  setStatus(fetchStatusAll, 'Hämtar match och tabell parallellt…', 'loading');
+  setStatus(fetchStatusAll, 'Hämtar match och tabell…', 'loading');
   previewInnebandyLineup.hidden = true;
   previewInnebandyTable.hidden  = true;
   btnFetchAll.disabled = true;
