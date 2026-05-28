@@ -104,6 +104,21 @@ function applyTimeoutVisibility() {
   elTimeOut.setAttribute('aria-hidden', String(!show));
 }
 
+// "Övriga matcher"-ticker (nedre högra hörnet). En popup åt gången i 5 s –
+// inkommande mål köas av TickerQueue. När scoreboarden lämnas töms kön så
+// uppskjutna popups inte dyker upp när scoreboarden återvänder.
+const elTicker    = document.getElementById('ticker-container');
+const tickerQueue = (elTicker && typeof TickerQueue === 'function')
+  ? new TickerQueue(elTicker, { popupMs: 5000 })
+  : null;
+
+function applyTickerVisibility() {
+  if (!elTicker) return;
+  const show = shouldShowScoreboard(activeKey);
+  elTicker.setAttribute('aria-hidden', String(!show));
+  if (!show && tickerQueue) tickerQueue.clear();
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // STATE MACHINE – Exklusiv grafik-växling
 // Sekvens: [Nuvarande åker ut] → [Nästa tonas in]
@@ -194,6 +209,7 @@ function switchTo(targetKey) {
     // Time-out-pillen kan följa med när vi landar på scoreboarden — visas
     // bara om en time-out är aktiv just nu.
     applyTimeoutVisibility();
+    applyTickerVisibility();
     setTimeout(() => {
       transitioning = false;
       // Spela upp ev. väntat mål från queue:n. Om det redan är aktiveKey
@@ -252,17 +268,25 @@ function renderLineup(gridEl, players) {
     // text-stagger = ~0.55s baseline) plus 45ms per spelare.
     row.style.animationDelay = `${0.55 + i * 0.045}s`;
 
-    // Dela upp "8 Erik Svensson" → nummer + namn
-    const parts = player.trim().split(/\s+/);
-    const hasNum = parts.length > 1 && /^\d+$/.test(parts[0]);
+    // Spelare är objekt { shirtNo, name, imageUrl } från servern; stötta även
+    // ren-sträng-format som legacy-fallback.
+    let num = '', name = '';
+    if (player && typeof player === 'object') {
+      num  = player.shirtNo != null ? String(player.shirtNo) : '';
+      name = player.name || '';
+    } else if (typeof player === 'string') {
+      const parts  = player.trim().split(/\s+/);
+      const hasNum = parts.length > 1 && /^\d+$/.test(parts[0]);
+      if (hasNum) { num = parts.shift(); name = parts.join(' '); }
+      else        { name = player; }
+    }
 
-    if (hasNum) {
-      const num  = parts.shift();
+    if (num) {
       row.innerHTML = `
         <span class="player-num">${escapeHtmlGfx(num)}</span>
-        <span class="player-name">${escapeHtmlGfx(parts.join(' '))}</span>`;
+        <span class="player-name">${escapeHtmlGfx(name)}</span>`;
     } else {
-      row.innerHTML = `<span class="player-name">${escapeHtmlGfx(player)}</span>`;
+      row.innerHTML = `<span class="player-name">${escapeHtmlGfx(name)}</span>`;
     }
 
     gridEl.appendChild(row);
@@ -466,6 +490,22 @@ function renderPlayerLowerThird(data) {
   elPlayerLtName.textContent = data.name || '';
   // .player-lt-num:empty och .player-lt-role:empty döljer själva sina spans
   // via CSS – ingen extra klass-toggle behövs.
+
+  // Foto: visas bara om ImageUrl följde med från IBIS. Tomt URL = hidden,
+  // load-error = hidden (vi visar hellre tomt än en bruten bild-ikon).
+  const photoWrap = document.getElementById('playerLtPhoto');
+  const photoImg  = document.getElementById('playerLtImage');
+  if (photoWrap && photoImg) {
+    const url = (data.imageUrl || '').trim();
+    if (url) {
+      photoImg.onerror = () => { photoWrap.hidden = true; };
+      photoImg.onload  = () => { photoWrap.hidden = false; };
+      photoImg.src = url;
+    } else {
+      photoImg.removeAttribute('src');
+      photoWrap.hidden = true;
+    }
+  }
 }
 
 /** Formaterar matchtid till "FRE 15/3" + "16:00" för fixtures-listan */
@@ -895,6 +935,19 @@ socket.on('graphicState', ({ activeGraphic }) => {
     setVisible(key, key === activeGraphic);
   });
   applySponsorStripVisibility(activeGraphic);
+  applyTickerVisibility();
+});
+
+// "Övriga matcher"-ticker – test-events från settings.html relayas av servern.
+// Mål ignoreras om scoreboarden inte är synlig just nu (vi har ingenstans att
+// visa dem och de skulle annars stå i kö för alltid).
+socket.on('tickerGoal', (goal) => {
+  if (!tickerQueue) return;
+  if (!shouldShowScoreboard(activeKey)) return;
+  tickerQueue.enqueue(goal);
+});
+socket.on('tickerClear', () => {
+  if (tickerQueue) tickerQueue.clear();
 });
 
 // ── Sponsor-strip ────────────────────────────────────────────────────────────

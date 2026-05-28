@@ -1285,9 +1285,51 @@ html, body {
 .player-lt-inner {
   padding: 20px 32px 22px;
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 22px;
+  position: relative;
+}
+
+/* Spelarfoto från IBIS (ImageUrl). Cirkulär ram med accent-glow,
+   matchar resten av lower-thirdens DNA. */
+.player-lt-photo {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(var(--lb-500-rgb), 0.08);
+  border: 2px solid rgba(var(--lb-900-rgb), 0.55);
+  box-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.35),
+              inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+
+  opacity: 0;
+  transform: translateX(-8px) scale(0.95);
+  transition: opacity 0.35s var(--ease-in),
+              transform 0.35s var(--ease-in);
+  transition-delay: 0.18s;
+}
+.player-lt-panel.visible .player-lt-photo {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transition: opacity 0.4s var(--ease-out),
+              transform 0.5s var(--ease-snap);
+  transition-delay: 0.22s;
+}
+.player-lt-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-lt-body {
+  display: flex;
   flex-direction: column;
   gap: 8px;
-  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .player-lt-team {
@@ -2280,4 +2322,67 @@ body.has-sponsor-strip .matchup-panel.visible,
 body.has-sponsor-strip .intermission-panel.visible {
   transition: opacity 0.55s var(--ease-out),
               bottom 0.5s var(--ease-out);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   "ÖVRIGA MATCHER"-TICKER – nedre högra hörnet
+   Visas bara när scoreboarden är aktiv. JS växlar [aria-hidden] vilket
+   triggar synlighet via opacity (för mjuk in-/uttoning av hela rutan).
+   ═══ */
+.ticker-floating {
+  position: fixed;
+  bottom: 36px;
+  right: 36px;
+  width: 720px;
+  max-width: calc(100vw - 72px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 1;
+  transition: opacity 0.35s var(--ease-out);
+}
+.ticker-floating[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ticker-popup {
+  padding: 20px 28px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-left: 5px solid var(--accent);
+  box-shadow: var(--glass-shadow);
+  color: var(--sollentuna-white);
+  font-family: 'Readex Pro', sans-serif;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "team   time"
+    "score  score"
+    "scorer scorer"
+    "assist assist";
+  gap: 6px 14px;
+  animation: tickerPopIn 0.45s cubic-bezier(.22,1,.36,1) both;
+}
+.ticker-popup.is-leaving { animation: tickerPopOut 0.3s ease-in both; }
+
+/* Hierarki: score är den primära infon (störst, fetast). Team + scorer
+   är sekundära. Time + assist är stödinformation. */
+.ticker-popup-team   { grid-area: team;   font-weight: 700; font-size: 1.3rem;  color: var(--accent); letter-spacing: 0.3px; }
+.ticker-popup-time   { grid-area: time;   font-size: 1rem;    color: var(--sollentuna-lb-200); font-variant-numeric: tabular-nums; }
+.ticker-popup-score  { grid-area: score;  font-size: 1.55rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: 0.2px; }
+.ticker-popup-scorer { grid-area: scorer; font-size: 1.2rem;  font-weight: 600; margin-top: 8px; }
+.ticker-popup-assist { grid-area: assist; font-size: 1rem;    color: var(--sollentuna-lb-200); }
+
+@keyframes tickerPopIn {
+  from { transform: translateX(40px) scale(.96); opacity: 0; }
+  to   { transform: translateX(0)    scale(1);   opacity: 1; }
+}
+@keyframes tickerPopOut {
+  to { transform: translateX(40px); opacity: 0; }
 }

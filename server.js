@@ -698,9 +698,16 @@ function buildScoreboardCode(fullName) {
 // Formaterar en spelare till strängen "{nummer} {namn}".
 // Sorterar samtliga spelare numeriskt på tröjnummer (1 → 99).
 function formatPlayers(apiPlayers) {
+  // Returnerar objekt så att foto-URL:en (ImageUrl från IBIS) följer med
+  // genom hela kedjan ända ut till spelar-/ledar-lower-third-grafiken.
+  // Klienterna förväntar sig { shirtNo, name, imageUrl }.
   return [...apiPlayers]
     .sort((a, b) => (a.ShirtNo || 0) - (b.ShirtNo || 0))
-    .map(p => `${p.ShirtNo} ${p.Name}`.trim());
+    .map(p => ({
+      shirtNo:  p.ShirtNo != null ? String(p.ShirtNo) : '',
+      name:     p.Name || '',
+      imageUrl: p.ImageUrl || ''
+    }));
 }
 
 // Normaliserar IBIS' rollnamn till det vi vill visa i grafiken.
@@ -1092,6 +1099,181 @@ async function fetchInnebandyStandings(url) {
   return { name, rows };
 }
 
+// ── Innebandy Stats API – Live-matcher i serien (ticker) ────────────────────
+// Klient-tickern (public/js/other-matches-ticker.js) pollar denna endpoint var
+// 30:e sekund för att upptäcka nya mål i "övriga matcher". Vi:
+//   1. Hämtar competitions/{id}/matches (lista över seriens alla matcher)
+//   2. Filtrerar fram troliga live-matcher via MatchDateTime-fönster
+//   3. Hämtar matches/{matchId} per kandidat för period + ev. sista mål
+//   4. Behåller bara de vars period kunde plockas (= verkligen live)
+// Cachas några sekunder så att flera samtidiga producer-flikar inte
+// dunkar IBIS extra hårt. IBIS-mål är sällsynta nog att en liten lag är OK.
+const SERIES_LIVE_CACHE_MS = 8000;
+const SERIES_LIVE_CONCURRENCY = 6;
+const seriesLiveCache = new Map();  // key: competitionId → { ts, payload }
+
+// Heuristik: matchen har troligen redan startat och är inte färdig än.
+// IBIS' listrespons saknar pålitligt status-fält så vi använder ett tidsfönster:
+// startad men inte mer än 4 h sedan start (täcker 3×20 min + paus + ev. ot/sd).
+function isPotentiallyLive(m, now) {
+  if (!m || !m.MatchDateTime) return false;
+  const start = new Date(m.MatchDateTime).getTime();
+  if (!Number.isFinite(start)) return false;
+  if (start > now) return false;
+  if (now - start > 4 * 60 * 60 * 1000) return false;
+  const status = (m.MatchStatus || m.Status || '').toString().toLowerCase();
+  if (status === 'finished' || status === 'ended' || status === 'final') return false;
+  return true;
+}
+
+// Periodtid (MM:SS) – fältnamnet varierar mellan IBIS-endpoints. Saknas ett
+// gångbart värde returnerar vi null (klienten klarar att rendera utan).
+function extractPeriodTimeFromIbis(data) {
+  if (!data) return null;
+  const candidates = [data.PeriodTime, data.MatchTime, data.ClockTime, data.GameTime];
+  for (const c of candidates) {
+    if (typeof c === 'string' && /^\d{1,2}:\d{2}$/.test(c)) return c;
+  }
+  return null;
+}
+
+function timeToSeconds(str) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str || ''));
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+}
+
+// Plockar ut senaste målet ur match-detaljerna. IBIS kan ha händelser i flera
+// olika arrays (Goals, MatchEvents, …) och med olika fältnamn — vi gör en
+// best-effort genomgång. Returnerar null om vi inte kan hitta något säkert.
+// Klient-tickern faller då tillbaka på score-diff för att avgöra scoringTeam.
+function extractLastGoalFromIbis(data) {
+  if (!data) return null;
+  const arrays = [data.Goals, data.MatchGoals, data.MatchEvents, data.Events]
+    .filter(Array.isArray);
+
+  const goalEvents = [];
+  for (const arr of arrays) {
+    const explicitGoalList = arr === data.Goals || arr === data.MatchGoals;
+    for (const e of arr) {
+      const type = (e?.EventType || e?.Type || e?.Event || '').toString().toLowerCase();
+      if (explicitGoalList || type === 'goal') goalEvents.push(e);
+    }
+  }
+  if (!goalEvents.length) return null;
+
+  // Sortera "senaste först" – period × 1000 + sekunder i perioden räcker som key
+  goalEvents.sort((a, b) => {
+    const aKey = (a.Period || a.PeriodNumber || 1) * 1000
+               + timeToSeconds(a.Time || a.PeriodTime || a.MatchTime);
+    const bKey = (b.Period || b.PeriodNumber || 1) * 1000
+               + timeToSeconds(b.Time || b.PeriodTime || b.MatchTime);
+    return bKey - aKey;
+  });
+
+  const g = goalEvents[0];
+  const scoringTeam =
+    (g.ScoringTeam === 'Home' || g.Team === 'Home' || g.IsHomeTeam === true) ? 'home'
+    : (g.ScoringTeam === 'Away' || g.Team === 'Away' || g.IsHomeTeam === false) ? 'away'
+    : null;
+
+  const scorerName = g.Scorer || g.Player || g.PlayerName || g.ScorerName;
+  const assistName = g.Assist || g.AssistPlayer || g.AssistName;
+
+  return {
+    scoringTeam,
+    scorer: scorerName ? {
+      jersey: String(g.ScorerJersey || g.PlayerJersey || g.JerseyNumber || ''),
+      name:   String(scorerName)
+    } : null,
+    assist: assistName ? {
+      jersey: String(g.AssistJersey || g.AssistPlayerJersey || ''),
+      name:   String(assistName)
+    } : null,
+    period:     g.Period || g.PeriodNumber || null,
+    periodTime: g.Time || g.PeriodTime || g.MatchTime || null
+  };
+}
+
+// Begränsar antalet parallella anrop mot IBIS. Promise.all över N arbetare
+// som drar nästa index ur en gemensam räknare tills listan är slut.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const idx = cursor++;
+        results[idx] = await fn(items[idx], idx);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+function filterExcludedFromLivePayload(payload, excludeMatchId) {
+  if (excludeMatchId == null) return payload;
+  const exclude = String(excludeMatchId);
+  return { matches: payload.matches.filter(m => String(m.matchId) !== exclude) };
+}
+
+async function fetchInnebandyLiveSeries(competitionId, { excludeMatchId = null } = {}) {
+  const cacheKey = String(competitionId);
+  const cached   = seriesLiveCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < SERIES_LIVE_CACHE_MS) {
+    return filterExcludedFromLivePayload(cached.payload, excludeMatchId);
+  }
+
+  const { apiRoot, headers } = await getInnebandyAuth();
+  const { data: list } = await axios.get(
+    `${apiRoot}competitions/${competitionId}/matches`,
+    { timeout: 10000, headers }
+  );
+  if (!Array.isArray(list)) throw new Error('Oväntat API-svar för serie-matcher');
+
+  const now        = Date.now();
+  const candidates = list.filter(m => isPotentiallyLive(m, now));
+
+  // Per-match-detaljer parallellt. En misslyckad match fäller inte hela
+  // tickern – vi loggar och hoppar över den.
+  const detailed = await mapWithConcurrency(candidates, SERIES_LIVE_CONCURRENCY, async (m) => {
+    try {
+      const { data } = await axios.get(`${apiRoot}matches/${m.MatchID}`, {
+        timeout: 8000, headers
+      });
+      return { listItem: m, detail: data };
+    } catch (err) {
+      console.warn(`[series-live] hopp över match ${m.MatchID}: ${err.message}`);
+      return null;
+    }
+  });
+
+  const matches = [];
+  for (const item of detailed) {
+    if (!item) continue;
+    const { listItem, detail } = item;
+    const period = extractPeriodFromIbis(detail);
+    if (period == null) continue;       // ej startad eller redan färdig
+
+    matches.push({
+      matchId:    listItem.MatchID,
+      homeTeam:   listItem.HomeTeam || detail.HomeTeam || '',
+      awayTeam:   listItem.AwayTeam || detail.AwayTeam || '',
+      homeGoals:  Number(detail.GoalsHomeTeam ?? listItem.GoalsHomeTeam ?? 0),
+      awayGoals:  Number(detail.GoalsAwayTeam ?? listItem.GoalsAwayTeam ?? 0),
+      status:     'Live',
+      period,
+      periodTime: extractPeriodTimeFromIbis(detail),
+      lastGoal:   extractLastGoalFromIbis(detail)
+    });
+  }
+
+  const payload = { matches };
+  seriesLiveCache.set(cacheKey, { ts: Date.now(), payload });
+  return filterExcludedFromLivePayload(payload, excludeMatchId);
+}
+
 // ── Socket-hantering ─────────────────────────────────────────────────────────
 // safeOn() wrappar varje handler i try/catch så att en korrupt payload eller
 // en oväntad runtime-bugg loggas i stället för att krascha hela processen.
@@ -1258,10 +1440,36 @@ io.on('connection', (socket) => {
       if (!name) {
         matchState.playerLowerThird = null;
       } else {
-        matchState.playerLowerThird = { team, teamName, number, name, role };
+        // Slå upp foto-URL i den aktuella laguppställningen. Spelare matchas
+        // i första hand på shirtNo (alltid unikt inom ett lag) och annars på
+        // namn. Ledare har inget number → matchas på namn. Saknas träff blir
+        // imageUrl = '' (graphics.js döljer img-elementet).
+        const lineup = team === 'away' ? matchState.lineupAway : matchState.lineupHome;
+        let imageUrl = '';
+        if (Array.isArray(lineup) && lineup.length) {
+          const match = lineup.find(p =>
+            p && typeof p === 'object' &&
+            ((number && String(p.shirtNo) === number) ||
+             (!number && p.name === name))
+          );
+          imageUrl = match?.imageUrl || '';
+        }
+        matchState.playerLowerThird = { team, teamName, number, name, role, imageUrl };
       }
     }
     io.emit('stateUpdate', matchState);
+  });
+
+  // ── Övriga matcher – ticker ────────────────────────────────────────────
+  // Testkort i settings.html skickar ett mockat mål-event per klick.
+  // Vi relayar det till alla anslutna klienter. graphics.html köar och
+  // visar en popup åt gången (5 s) så länge scoreboarden är aktiv.
+  safeOn(socket, 'tickerTestGoal', (goal) => {
+    if (!goal || typeof goal !== 'object') return;
+    io.emit('tickerGoal', goal);
+  });
+  safeOn(socket, 'tickerTestClear', () => {
+    io.emit('tickerClear');
   });
 
   // Kommentatorer (lower-third)
@@ -1868,6 +2076,26 @@ app.delete('/api/sponsors/:id', (req, res) => {
   saveSponsorManifest();
   broadcastSponsors();
   res.json({ success: true, sponsors: sponsorState.sponsors });
+});
+
+// ── Live-matcher i serien (övriga-matcher-tickern) ──────────────────────────
+// Pollas av public/js/other-matches-ticker.js var 30:e sekund. Returnerar
+// { matches: LiveMatch[] } i det format klienten väntar sig. Skicka
+// ?currentMatchId=NNN för att server-side exkludera matchen som streamas.
+app.get('/api/series/:competitionId/live', async (req, res) => {
+  const competitionId = parseInt(req.params.competitionId, 10);
+  if (!Number.isFinite(competitionId) || competitionId <= 0) {
+    return res.status(400).json({ error: 'Ogiltigt competitionId' });
+  }
+  try {
+    const payload = await fetchInnebandyLiveSeries(competitionId, {
+      excludeMatchId: req.query.currentMatchId
+    });
+    res.json(payload);
+  } catch (err) {
+    console.warn('[series-live] fel:', err.message);
+    res.status(502).json({ error: err.message || 'Kunde inte hämta live-matcher' });
+  }
 });
 
 // ── Statusfråga (för Stream Deck-feedback) ───────────────────────────────────
