@@ -202,7 +202,7 @@ function renderPenaltyList(listEl, penalties) {
   if (!hasRows && !emptyLi) {
     emptyLi = document.createElement('li');
     emptyLi.className   = 'penalty-empty';
-    emptyLi.textContent = 'Inga aktiva';
+    emptyLi.textContent = 'Inga aktiva utvisningar just nu';
     listEl.appendChild(emptyLi);
   } else if (hasRows && emptyLi) {
     emptyLi.remove();
@@ -517,7 +517,7 @@ function renderScoreSyncUI() {
   if (!scoreSyncStatus) return;
   scoreSyncStatus.classList.remove('is-ok', 'is-error');
   if (latestScoreSyncMode === 'manual') {
-    scoreSyncStatus.textContent = 'Manuell hantering – använd +1/−1.';
+    scoreSyncStatus.textContent = 'Du har valt manuell hantering. Ingen information hämtas från IBIS';
     return;
   }
   if (!latestSyncMatchId) {
@@ -586,7 +586,7 @@ function renderPeriodSyncUI() {
   if (!periodSyncStatus) return;
   periodSyncStatus.classList.remove('is-ok', 'is-error');
   if (latestPeriodSyncMode === 'manual') {
-    periodSyncStatus.textContent = 'Manuell hantering – använd Nästa period/Återställ.';
+    periodSyncStatus.textContent = 'Du har valt manuell hantering. Ingen information hämtas från IBIS';
     return;
   }
   if (!latestSyncMatchId) {
@@ -725,10 +725,10 @@ inputClockSet.addEventListener('focus', () => {
 /** Uppdaterar knappens text + visuella state baserat på clockVisible */
 function updateClockToggleButton(visible) {
   if (visible) {
-    btnToggleClock.textContent = 'Dölj klockan';
+    btnToggleClock.textContent = 'Dölj matchklocka';
     btnToggleClock.classList.remove('is-hidden');
   } else {
-    btnToggleClock.textContent = 'Visa klockan';
+    btnToggleClock.textContent = 'Visa matchklocka';
     btnToggleClock.classList.add('is-hidden');
   }
 }

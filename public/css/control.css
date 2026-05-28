@@ -1468,6 +1468,7 @@ input[type="text"].input-clock-set.input-error {
   color: var(--text-muted);
   font-style: italic;
 }
+.live-monitor-section .preview-fixtures-list { padding-left: 0; padding-right: 0; }
 .ticker-feed-list { display: flex; flex-direction: column; gap: 6px; }
 .ticker-feed-row {
   padding: 6px 8px;
