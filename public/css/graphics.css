@@ -1998,23 +1998,22 @@ html, body {
   filter: drop-shadow(0 0 6px rgba(var(--lb-900-rgb), 0.35));
 }
 
-/* PAUSVILA-eyebrow – skyltens huvudrubrik. Större och tydligare än
-   matchup-eyebrow eftersom det här är skyltens identitet, inte bara
-   en serielabel. */
+/* Serie-eyebrow – serienamnet överst. Samma design som matchup-eyebrow
+   (Inför match) så skyltarna delar identitet. */
 .intermission-eyebrow {
   display: block;
   text-align: center;
   font-family: var(--font-display);
-  font-size: 2.2rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.36em;
   text-transform: uppercase;
   color: var(--sollentuna-lb-500);
-  margin-bottom: 24px;
-  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.85),
-               0 2px 4px  rgba(0, 0, 0, 0.7),
-               0 0 22px   rgba(var(--lb-900-rgb), 0.45);
+  margin-bottom: 30px;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.85),
+               0 1px 3px rgba(0, 0, 0, 0.7);
 }
+.intermission-eyebrow:empty { display: none; }
 
 /* Layout: identisk struktur som matchup-row – flex-centrerar hela
    gruppen så logotyperna alltid ligger symmetriskt mot panelens kanter. */
@@ -2077,7 +2076,7 @@ html, body {
    aktuell ställning stort och centrerat mellan lagen. */
 .intermission-score {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   gap: 14px;
   padding: 0 12px;
