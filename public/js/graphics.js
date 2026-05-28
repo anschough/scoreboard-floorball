@@ -75,7 +75,9 @@ const elSponsorTrack = document.getElementById('sponsorTrack');
 // Time-out är medvetet INTE med – stripen ska INTE synas vid time-out.
 const SPONSOR_GRAPHICS = new Set(['matchup', 'intermission']);
 
-// Karta: state-nyckel → DOM-element
+// Karta: state-nyckel → DOM-element. Time-out är medvetet INTE här — den är
+// numera en automatisk overlay som visas när matchState.timeOut är satt
+// OCH scoreboarden är aktiv, inte ett separat grafikval.
 const graphicElements = {
   lineupHome:   elLineupHome,
   lineupAway:   elLineupAway,
@@ -85,16 +87,22 @@ const graphicElements = {
   matchup:      elMatchup,
   intermission: elIntermission,
   playerLowerThird: elPlayerLt,
-  preGameStats: elPreGame,
-  timeout:      elTimeOut
+  preGameStats: elPreGame
 };
 
-// Grafiker som tillåter scoreboarden att stå kvar (lower-third overlays).
-// Kommentator-skylten visas numera på egen hand och är därför INTE en overlay.
-// Time-out är dockad direkt under scoreboarden så scoreboarden måste vara
-// kvar för att skylten ska sitta på rätt plats.
-const SCOREBOARD_OVERLAYS = new Set(['timeout']);
+// Grafiker som tillåter scoreboarden att stå kvar. Kommentator-skylten visas
+// numera på egen hand och är därför INTE en overlay.
+const SCOREBOARD_OVERLAYS = new Set();
 const shouldShowScoreboard = (g) => g === 'scoreboard' || SCOREBOARD_OVERLAYS.has(g);
+
+// Time-out-pillen: synlighet styrs av (scoreboarden är aktiv) AND (en time-out
+// är aktiv i state). Anropas både vid grafik-byten och timeOutUpdate.
+function applyTimeoutVisibility() {
+  if (!elTimeOut) return;
+  const show = shouldShowScoreboard(activeKey) && !!lastKnownState?.timeOut;
+  elTimeOut.classList.toggle('visible', show);
+  elTimeOut.setAttribute('aria-hidden', String(!show));
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // STATE MACHINE – Exklusiv grafik-växling
@@ -158,9 +166,14 @@ function switchTo(targetKey) {
   if (fromKey !== 'scoreboard') {
     setVisible(fromKey, false);
   }
-  // Dölj scoreboarden om vi växlar till en fullskärms-grafik
+  // Dölj scoreboarden om vi växlar till en fullskärms-grafik. Då försvinner
+  // även time-out-pillen (den hänger ihop med scoreboarden).
   if (wasScoreboardShown && !willScoreboardShow) {
     setVisible('scoreboard', false);
+    if (elTimeOut) {
+      elTimeOut.classList.remove('visible');
+      elTimeOut.setAttribute('aria-hidden', 'true');
+    }
   }
   // Sponsor-strip följer matchup/intermission – synk på samma slag som
   // resten av exit:en så den glider ner när vi byter bort.
@@ -178,6 +191,9 @@ function switchTo(targetKey) {
       if (targetKey === 'intermission') refreshIntermissionWaiting();
       setVisible(targetKey, true);
     }
+    // Time-out-pillen kan följa med när vi landar på scoreboarden — visas
+    // bara om en time-out är aktiv just nu.
+    applyTimeoutVisibility();
     setTimeout(() => {
       transitioning = false;
       // Spela upp ev. väntat mål från queue:n. Om det redan är aktiveKey
@@ -741,6 +757,8 @@ socket.on('stateUpdate', (state) => {
   lastKnownState = state;
   // Rendera time-out om det finns ett i state:t (initial hydration vid connect)
   if (state.timeOut) renderTimeOut(state.timeOut, state);
+  // Synka time-out-pillens synlighet med aktuellt state + aktiv grafik.
+  applyTimeoutVisibility();
   // Poängtavla
   const prevA = parseInt(elScoreA.textContent, 10);
   const prevB = parseInt(elScoreB.textContent, 10);
@@ -939,7 +957,10 @@ function renderTimeOut(timeOut, state) {
 let lastKnownState = {};
 
 socket.on('timeOutUpdate', ({ timeOut } = {}) => {
-  renderTimeOut(timeOut, lastKnownState);
+  // Synka lastKnownState så applyTimeoutVisibility ser senaste värdet.
+  lastKnownState = { ...lastKnownState, timeOut: timeOut || null };
+  if (timeOut) renderTimeOut(timeOut, lastKnownState);
+  applyTimeoutVisibility();
 });
 
 /**

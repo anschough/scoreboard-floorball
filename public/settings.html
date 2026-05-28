@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inställningar – Scoreboard</title>
+  <title>Inställningar – FBC Sollentuna Broadcaster</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/icons.css">
   <link rel="stylesheet" href="css/control.css">
   <link rel="stylesheet" href="css/settings.css">
 </head>
@@ -12,7 +15,7 @@
 
   <header class="docs-header-bar">
     <div class="docs-header-inner">
-      <a href="control.html" class="header-btn">← Tillbaka</a>
+      <a href="control.html" class="header-btn">Tillbaka</a>
       <h1>Inställningar</h1>
       <span id="connection-status" class="status disconnected" role="status" aria-live="polite">Ansluter…</span>
     </div>
@@ -23,11 +26,16 @@
     <article class="dash-card">
       <h2>Grafiklänk för OBS Studio</h2>
       <p class="card-hint">
-        Kopiera URL:en nedan och lägg in den som
-        <strong>Browser Source</strong> i OBS Studio så visas grafiken
-        i sändningen. Använd t.ex. <strong>1920 × 1080</strong> som
-        bredd/höjd och kryssa i <strong>"Shutdown source when not visible"</strong>
-        för att spara resurser.
+        Kopiera URL:en nedan och lägg till den som en
+        <strong>Webbläsare (Browser Source)</strong> i OBS Studio för att
+        visa grafiken.
+      </p>
+      <p class="card-hint card-hint-meta">
+        <strong>Upplösning:</strong> Använd 1920 × 1080 (eller den storlek
+        grafiken är designad för).<br>
+        <strong>Prestanda:</strong> Kryssa i "Stäng av källa när den inte
+        visas" (Shutdown source when not visible) för att spara systemresurser
+        när grafiken inte används.
       </p>
       <div class="obs-url-row">
         <code id="obsUrl" class="obs-url">http://localhost:3000/graphics.html</code>
@@ -38,35 +46,41 @@
     </article>
 
     <article class="dash-card">
-      <h2>Sponsorlogotyper</h2>
+      <header class="sponsor-card-header">
+        <span class="sponsor-count-badge" id="sponsorCount" aria-live="polite">0 av 15 uppladdade logotyper</span>
+        <h2>Sponsorer</h2>
+      </header>
       <p class="card-hint">
-        Ladda upp <strong>upp till 15 sponsorlogotyper</strong>. De visas i en
-        rullande remsa längst ner på skärmen när grafikerna
-        <strong>Inför match</strong> och <strong>Pausvila</strong> är aktiva.
-        Stödda format: PNG, JPG, GIF, WEBP, SVG. Transparent PNG rekommenderas.
+        Ladda upp <strong>upp till 15 logotyper</strong>. Sponsorerna visas
+        i en rullande remsa när grafikerna <strong>"Inför match"</strong>
+        och <strong>"Pausvila"</strong> är aktiva.
+      </p>
+      <p class="card-hint card-hint-meta">
+        <strong>Format:</strong> PNG, JPG, GIF, WEBP, SVG.<br>
+        <strong>Tips:</strong> Vi rekommenderar transparent PNG för bäst resultat.
       </p>
 
-      <div class="sponsor-toolbar">
-        <label for="sponsorFiles" class="btn btn-primary sponsor-add-btn">
-          + Lägg till logotyper
-        </label>
-        <input type="file" id="sponsorFiles" class="sponsor-file-input"
-               accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-               multiple>
-        <span class="sponsor-count" id="sponsorCount">0 / 10</span>
-      </div>
+      <input type="file" id="sponsorFiles" class="sponsor-file-input"
+             accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+             multiple>
 
       <div id="sponsorList" class="sponsor-list" aria-live="polite"></div>
 
       <p id="sponsorEmpty" class="scroll-empty">
-        Inga sponsorer uppladdade ännu. Klicka på <strong>Lägg till logotyper</strong> ovan.
+        Inga sponsorer uppladdade ännu. Klicka på <strong>Lägg till</strong> nedan.
       </p>
 
-      <div class="sponsor-save-row">
-        <button id="btnSaveSponsors" class="btn btn-primary full-width" disabled>
-          Spara sponsorer
-        </button>
+      <div class="sponsor-actions">
         <div id="sponsorStatus" class="fetch-status" role="status" aria-live="polite"></div>
+        <div class="sponsor-actions-buttons">
+          <label for="sponsorFiles" class="btn btn-secondary sponsor-add-btn">
+            <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+            Lägg till
+          </label>
+          <button id="btnSaveSponsors" class="btn btn-primary sponsor-save-btn" disabled>
+            Spara ändringar
+          </button>
+        </div>
       </div>
     </article>
 
@@ -87,9 +101,9 @@
     </article>
 
     <article class="dash-card docs-card">
-      <h2>Stream Deck shortcuts</h2>
+      <h2>Stream Deck-genvägar</h2>
       <p class="card-hint">
-        Klicka på en shortcut nedan för att kopiera hela URL:en till urklipp.
+        Klicka på en genväg nedan för att kopiera hela URL:en till urklipp.
         Denna URL ska sedan läggas till i Stream Deck via funktionen
         <strong>System → Website</strong>. Glöm inte att markera
         <strong>"GET request in background"</strong> när du klistrat in din URL.
@@ -105,7 +119,7 @@
         <div class="api-group">
           <h3>Resultat</h3>
           <table class="api-table">
-            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <thead><tr><th>Genväg URL</th><th>Effekt</th></tr></thead>
             <tbody>
               <tr><td><code class="api-route">/api/score/home/add</code></td><td>Hemmalag +1</td></tr>
               <tr><td><code class="api-route">/api/score/home/sub</code></td><td>Hemmalag −1</td></tr>
@@ -118,7 +132,7 @@
         <div class="api-group">
           <h3>Matchklocka</h3>
           <table class="api-table">
-            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <thead><tr><th>Genväg URL</th><th>Effekt</th></tr></thead>
             <tbody>
               <tr><td><code class="api-route">/api/clock/start</code></td><td>Starta</td></tr>
               <tr><td><code class="api-route">/api/clock/pause</code></td><td>Pausa</td></tr>
@@ -131,7 +145,7 @@
         <div class="api-group">
           <h3>Grafik</h3>
           <table class="api-table">
-            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <thead><tr><th>Genväg URL</th><th>Effekt</th></tr></thead>
             <tbody>
               <tr><td><code class="api-route">/api/graphic/scoreboard</code></td><td>Scoreboard</td></tr>
               <tr><td><code class="api-route">/api/graphic/lineupHome</code></td><td>Hemmalag</td></tr>
@@ -140,8 +154,8 @@
               <tr><td><code class="api-route">/api/graphic/fixtures</code></td><td>Omgångens matcher</td></tr>
               <tr><td><code class="api-route">/api/graphic/commentators</code></td><td>Visa kommentatorsskylten (slår alltid på, döljer inte)</td></tr>
               <tr><td><code class="api-route">/api/graphic/commentators/toggle</code></td><td>Växla kommentatorsskylten av/på — en knapp för båda (av = scoreboard)</td></tr>
-              <tr><td><code class="api-route">/api/graphic/matchup</code></td><td>Inför/Paus</td></tr>
-              <tr><td><code class="api-route">/api/graphic/intermission</code></td><td>Pausvila (räknar ut nästa period)</td></tr>
+              <tr><td><code class="api-route">/api/graphic/matchup</code></td><td>Inför match</td></tr>
+              <tr><td><code class="api-route">/api/graphic/intermission</code></td><td>Pausvila (räknar ner till nästa period)</td></tr>
               <tr><td><code class="api-route">/api/graphic/preGameStats</code></td><td>Statistik inför match</td></tr>
               <tr><td><code class="api-route">/api/graphic/clear</code></td><td>Göm allt</td></tr>
             </tbody>
@@ -151,7 +165,7 @@
         <div class="api-group">
           <h3>Utvisningar</h3>
           <table class="api-table">
-            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <thead><tr><th>Genväg URL</th><th>Effekt</th></tr></thead>
             <tbody>
               <tr><td><code class="api-route">/api/penalty/home/add?minutes=2</code></td><td>Hemma – 2 min utvisning</td></tr>
               <tr><td><code class="api-route">/api/penalty/home/add?minutes=5</code></td><td>Hemma – 5 min utvisning</td></tr>
@@ -168,7 +182,7 @@
         <div class="api-group">
           <h3>Period &amp; Status</h3>
           <table class="api-table">
-            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <thead><tr><th>Genväg URL</th><th>Effekt</th></tr></thead>
             <tbody>
               <tr><td><code class="api-route">/api/period/next</code></td><td>Stega period (kapas vid 5)</td></tr>
               <tr><td><code class="api-route">/api/period/reset</code></td><td>Period → 1</td></tr>

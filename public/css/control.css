@@ -141,16 +141,18 @@ h2 {
 }
 
 .header-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   margin-bottom: 10px;
   gap: 16px;
 }
 
 .header-brand {
+  grid-column: 2;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
 }
 .header-brand h1 {
@@ -158,11 +160,14 @@ h2 {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--text);
+  text-align: center;
 }
 
 .header-meta {
+  grid-column: 3;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
 }
@@ -580,8 +585,12 @@ input[type="url"]:focus {
   padding: 2px 6px;
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-clear:hover { color: var(--err); background: rgba(255, 107, 107, 0.1); }
+.btn-clear .material-symbols-outlined { font-size: 1.15rem; }
 
 .full-width { width: 100%; }
 
@@ -707,7 +716,8 @@ input[type="url"]:focus {
   gap: 2px;
 }
 
-.score-sync-btn {
+.score-sync-btn,
+.period-sync-btn {
   flex: 1 1 0;
   appearance: none;
   background: transparent;
@@ -725,15 +735,18 @@ input[type="url"]:focus {
   white-space: nowrap;
   min-height: 36px;
 }
-.score-sync-btn:hover {
+.score-sync-btn:hover,
+.period-sync-btn:hover {
   color: var(--text);
 }
-.score-sync-btn.is-active {
+.score-sync-btn.is-active,
+.period-sync-btn.is-active {
   background: var(--accent);
   color: var(--sollentuna-dark-blue);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
-.score-sync-btn:focus-visible {
+.score-sync-btn:focus-visible,
+.period-sync-btn:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
@@ -771,8 +784,16 @@ input[type="url"]:focus {
 
 .clock-controls-xl {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
+  margin-bottom: 10px;
+}
+
+.clock-reset-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 8px;
   margin-bottom: 10px;
 }
 
@@ -1118,6 +1139,7 @@ input[type="text"].input-clock-set.input-error {
   transition: background 0.12s, border-color 0.12s, transform 0.08s;
   line-height: 1;
 }
+.btn-penalty-remove .material-symbols-outlined { font-size: 1.05rem; }
 .btn-penalty-remove:hover {
   background: rgba(255, 107, 107, 0.18);
   border-color: rgba(255, 107, 107, 0.5);
@@ -1544,16 +1566,21 @@ input[type="text"].input-clock-set.input-error {
   border: 1px solid var(--border);
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-/* Synlig kopieringsikon (unicode U+29C9 "two joined squares") signalerar
-   att cellen är klickbar. Blir mer framträdande vid hover/focus. */
+/* Synlig kopieringsikon (Material Symbols "content_copy") signalerar
+   att cellen är klickbar. Blir mer framträdande vid hover/focus.
+   Codepoints: content_copy=e14d, check=e5ca, close=e5cd. */
 .api-table code.api-route::after {
-  content: '\29C9';
+  content: '\e14d';
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-feature-settings: 'liga';
   margin-left: 8px;
-  font-size: 0.95em;
+  font-size: 1.1em;
   color: var(--text-muted);
   transition: color 0.15s, transform 0.15s;
   display: inline-block;
-  vertical-align: baseline;
+  vertical-align: middle;
+  line-height: 1;
 }
 .api-table code.api-route:hover,
 .api-table code.api-route:focus-visible {
@@ -1568,17 +1595,15 @@ input[type="text"].input-clock-set.input-error {
   transform: translateY(-1px);
 }
 
-/* Feedback-tillstånd direkt på cellen */
+/* Feedback-tillstånd direkt på cellen — icon byts mot check/close i samma font. */
 .api-table code.api-route.copied {
   color: #22c55e;
   background: rgba(34, 197, 94, 0.16);
   border-color: rgba(34, 197, 94, 0.45);
 }
 .api-table code.api-route.copied::after {
-  content: '\2713 Kopierat';
+  content: '\e5ca';
   color: #22c55e;
-  font-family: inherit;
-  font-weight: 700;
 }
 .api-table code.api-route.copy-failed {
   color: #ef4444;
@@ -1586,10 +1611,8 @@ input[type="text"].input-clock-set.input-error {
   border-color: rgba(239, 68, 68, 0.45);
 }
 .api-table code.api-route.copy-failed::after {
-  content: '\2715 Misslyckades';
+  content: '\e5cd';
   color: #ef4444;
-  font-family: inherit;
-  font-weight: 700;
 }
 
 
@@ -1624,15 +1647,24 @@ input[type="text"].input-clock-set.input-error {
 @media (max-width: 720px) {
   .form-grid-2 { grid-template-columns: 1fr; }
   .ib-lineup-grid { grid-template-columns: 1fr; }
-  .header-top { flex-wrap: wrap; }
-  /* Tillåt header-meta att (a) radbryta sina knappar och (b) krympa i parent-flexet –
-     utan att ta bort flex-shrink: 0 stannar Ansluten/Öppna grafik/Inställningar
-     på en rad och klipps mot höger viewport-kant. */
+  /* På mobil staplar vi brand (centrerad) ovanpå meta-raden (full bredd, wrap)
+     i stället för 3-kolumners grid — så Ansluten/Inställningar inte klipps mot
+     höger viewport-kant. */
+  .header-top {
+    grid-template-columns: 1fr;
+  }
+  .header-brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+  }
   .header-meta {
+    grid-column: 1;
+    grid-row: 2;
     flex-wrap: wrap;
     flex-shrink: 1;
     width: 100%;
-    justify-content: flex-start;
+    justify-content: center;
   }
   /* Score-board behåller hemma/borta sida vid sida – VS-mellankolumnen göms
      så att de två score-sidorna får all bredd; minmax(0,1fr) ser till att

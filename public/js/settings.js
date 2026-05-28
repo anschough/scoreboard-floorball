@@ -104,12 +104,23 @@ function fileToDataUrl(file) {
 }
 
 // ── Render listan ────────────────────────────────────────────────────────────
+let dragFromIndex = null;
+
 function render() {
   elList.innerHTML = '';
 
   items.forEach((item, idx) => {
     const card = document.createElement('div');
     card.className = 'sponsor-card';
+    card.draggable = true;
+    card.dataset.index = String(idx);
+
+    // Synlig drag-handle som indikerar att kortet kan dras.
+    const handle = document.createElement('div');
+    handle.className = 'sponsor-card-handle';
+    handle.title = 'Dra för att ändra ordning';
+    handle.setAttribute('aria-hidden', 'true');
+    handle.innerHTML = '<span class="material-symbols-outlined">drag_indicator</span>';
 
     const preview = document.createElement('div');
     preview.className = 'sponsor-card-preview';
@@ -129,7 +140,7 @@ function render() {
     const upBtn = document.createElement('button');
     upBtn.className = 'sponsor-action';
     upBtn.type = 'button';
-    upBtn.textContent = '↑';
+    upBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>';
     upBtn.title = 'Flytta upp';
     upBtn.setAttribute('aria-label', `Flytta ${name.textContent} uppåt`);
     upBtn.disabled = idx === 0;
@@ -138,7 +149,7 @@ function render() {
     const downBtn = document.createElement('button');
     downBtn.className = 'sponsor-action';
     downBtn.type = 'button';
-    downBtn.textContent = '↓';
+    downBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span>';
     downBtn.title = 'Flytta ned';
     downBtn.setAttribute('aria-label', `Flytta ${name.textContent} nedåt`);
     downBtn.disabled = idx === items.length - 1;
@@ -147,17 +158,63 @@ function render() {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'sponsor-action sponsor-action-remove';
     removeBtn.type = 'button';
-    removeBtn.textContent = '✕';
+    removeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
     removeBtn.title = 'Ta bort';
     removeBtn.setAttribute('aria-label', `Ta bort ${name.textContent}`);
     removeBtn.addEventListener('click', () => remove(idx));
 
+    // Förhindra att drag startar när användaren tar tag i en knapp.
+    [upBtn, downBtn, removeBtn].forEach(btn => {
+      btn.draggable = false;
+      btn.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
+
     actions.append(upBtn, downBtn, removeBtn);
-    card.append(preview, name, actions);
+    card.append(handle, preview, name, actions);
+
+    // ── Drag-and-drop ────────────────────────────────────────────────────
+    card.addEventListener('dragstart', (e) => {
+      dragFromIndex = idx;
+      card.classList.add('is-dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        // Vissa browsers kräver att vi sätter dataTransfer-payload för
+        // att dragging ska initieras.
+        e.dataTransfer.setData('text/plain', String(idx));
+      }
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('is-dragging');
+      elList.querySelectorAll('.is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
+      dragFromIndex = null;
+    });
+
+    card.addEventListener('dragover', (e) => {
+      if (dragFromIndex === null || dragFromIndex === idx) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      card.classList.add('is-drop-target');
+    });
+
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('is-drop-target');
+    });
+
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('is-drop-target');
+      const from = dragFromIndex;
+      const to = idx;
+      dragFromIndex = null;
+      if (from === null || from === to) return;
+      move(from, to);
+    });
+
     elList.appendChild(card);
   });
 
-  elCount.textContent = `${items.length} / ${MAX_SPONSORS}`;
+  elCount.textContent = `${items.length} av ${MAX_SPONSORS} uppladdade logotyper`;
   elCount.classList.toggle('sponsor-count-full', items.length >= MAX_SPONSORS);
 
   elSaveBtn.disabled = !dirty;

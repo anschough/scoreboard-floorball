@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#252525">
-  <title>Matchrapportering – Score, Klocka, Period</title>
+  <title>Liverapportering – FBC Sollentuna Broadcaster</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/icons.css">
   <link rel="stylesheet" href="css/mobile-control.css">
 </head>
 <body>
@@ -13,10 +16,37 @@
   <main class="mc-wrap">
 
     <header class="mc-topbar">
-      <h1 class="mc-title">Matchrapportering</h1>
+      <span class="mc-topbar-spacer" aria-hidden="true"></span>
+      <h1 class="mc-title">Liverapportering</h1>
       <span id="connection-status" class="mc-status mc-status-off"
             role="status" aria-live="polite">Ansluter…</span>
     </header>
+
+    <!-- ── MATCHKLOCKA ─────────────────────────────────────────────── -->
+    <section class="mc-card" aria-labelledby="mc-h-clock">
+      <h2 id="mc-h-clock">Matchklocka</h2>
+      <div class="mc-clock" id="displayClock">00:00</div>
+      <div class="mc-row mc-clock-main">
+        <button id="btnStart" class="mc-btn mc-btn-start">Starta</button>
+      </div>
+      <div class="mc-row mc-clock-adjust" role="group" aria-label="Justera matchtid">
+        <button id="btnClockMinus" class="mc-btn mc-btn-adjust" aria-label="Dra bort 1 sekund">−1 sek</button>
+        <button id="btnClockPlus"  class="mc-btn mc-btn-adjust" aria-label="Lägg till 1 sekund">+1 sek</button>
+      </div>
+      <div class="mc-row mc-clock-set">
+        <input id="inputClockSet" class="mc-input mc-input-clock" type="text"
+               inputmode="numeric" placeholder="MM:SS" maxlength="5"
+               aria-label="Justera matchklockan (MM:SS)"
+               aria-describedby="inputClockSetHint">
+        <button id="btnClockSet" class="mc-btn mc-btn-set">Justera tid</button>
+      </div>
+      <span id="inputClockSetHint" class="mc-visually-hidden">
+        Skriv tiden som 12:30 eller 1230. Sekunder mellan 00 och 59.
+      </span>
+      <div class="mc-row mc-clock-reset">
+        <button id="btnReset" class="mc-btn mc-btn-reset">Återställ</button>
+      </div>
+    </section>
 
     <!-- ── RESULTAT ─────────────────────────────────────────────────── -->
     <section class="mc-card" aria-labelledby="mc-h-score">
@@ -25,10 +55,10 @@
         <div class="mc-sync-display" role="status" aria-live="polite"
              aria-label="Aktiv resultatkälla – styrs från kontrollpanelen">
           <span class="mc-sync-label">Resultatkälla</span>
-          <span class="mc-sync-value" id="scoreSyncMode">Hämta från IBIS</span>
+          <span class="mc-sync-value" id="scoreSyncMode">Hämtas från IBIS</span>
         </div>
         <span class="mc-sync-status" id="scoreSyncStatus" aria-live="polite">
-          Hämta en match från IBIS för att starta synken.
+          Hämta data från IBIS för att starta synkronisering av matchresultat.
         </span>
       </div>
       <div class="mc-score">
@@ -55,34 +85,19 @@
       </div>
     </section>
 
-    <!-- ── MATCHKLOCKA ─────────────────────────────────────────────── -->
-    <section class="mc-card" aria-labelledby="mc-h-clock">
-      <h2 id="mc-h-clock">Matchklocka</h2>
-      <div class="mc-clock" id="displayClock">00:00</div>
-      <div class="mc-row mc-clock-main">
-        <button id="btnStart" class="mc-btn mc-btn-start">Start</button>
-        <button id="btnPause" class="mc-btn mc-btn-pause" disabled>Pausa</button>
-        <button id="btnReset" class="mc-btn mc-btn-reset">Återställ</button>
-      </div>
-      <div class="mc-row mc-clock-adjust" role="group" aria-label="Justera matchtid">
-        <button id="btnClockMinus" class="mc-btn mc-btn-adjust" aria-label="Dra bort 1 sekund">−1 sek</button>
-        <button id="btnClockPlus"  class="mc-btn mc-btn-adjust" aria-label="Lägg till 1 sekund">+1 sek</button>
-      </div>
-      <div class="mc-row mc-clock-set">
-        <input id="inputClockSet" class="mc-input mc-input-clock" type="text"
-               inputmode="numeric" placeholder="MM:SS" maxlength="5"
-               aria-label="Justera matchklockan (MM:SS)"
-               aria-describedby="inputClockSetHint">
-        <button id="btnClockSet" class="mc-btn mc-btn-set">Justera tid</button>
-      </div>
-      <span id="inputClockSetHint" class="mc-visually-hidden">
-        Skriv tiden som 12:30 eller 1230. Sekunder mellan 00 och 59.
-      </span>
-    </section>
-
     <!-- ── PERIOD ─────────────────────────────────────────────────── -->
     <section class="mc-card" aria-labelledby="mc-h-period">
       <h2 id="mc-h-period">Period</h2>
+      <div class="mc-sync-row" aria-label="Källa för period">
+        <div class="mc-sync-display" role="status" aria-live="polite"
+             aria-label="Aktiv periodkälla – styrs från kontrollpanelen">
+          <span class="mc-sync-label">Periodkälla</span>
+          <span class="mc-sync-value" id="periodSyncMode">Hämtas från IBIS</span>
+        </div>
+        <span class="mc-sync-status" id="periodSyncStatus" aria-live="polite">
+          Hämta data från IBIS för att starta synkronisering av period.
+        </span>
+      </div>
       <div class="mc-period" id="periodDisplay">Period 1</div>
       <div class="mc-row mc-period-btns">
         <button id="btnPeriodNext"  class="mc-btn mc-btn-primary">Nästa period</button>
