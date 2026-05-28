@@ -17,14 +17,14 @@ En webbserver med realtidsuppdateringar som driver en **grafik-overlay** för OB
 - **Utvisningar** synkade med matchklockan (2 min, 2+2 min, 5 min – max 2 aktiva per lag)
 - **Time-out** med 30 sekunders nedräkning, dockad under scoreboarden
 - **Repris-overlay** – animerat "REPRIS"-pill som visas i OBS:s replay-källa
-- **Live-ticker** för övriga matchens mål – visas som popups i nedre hörnet under pågående sändning
-- **Lineup** för hemma- och bortalag (inkl. ledare/tränare)
-- **Live serietabell** och **matchprogram** (omgångens matcher)
-- **Matchup-skylt** inför match med lagloggor, arena och matchstart
-- **Statistik inför match**
-- **Spelar- och ledarskylt** (lower-third) med valfri spelarfoto
+- **Live-ticker** för övriga pågående matcher – mål visas som popups i nedre hörnet under pågående sändning
+- **Laguppställning** för hemma- och bortalag (spelare & ledare)
+- **Live Serietabell** och **matchprogram** (omgångens matcher)
+- **Matchup** information inför match med lagloggor, spelplats och matchstart
+- **Statistik inför match** statistik om lagen inför matchen
+- **Spelar- och ledarskylt** (lower-third) med valfri spelarfoto för intervjuer
 - **Kommentatorskylt**
-- **Pausvila**-skylt
+- **Pausvila**-skylt som visar att vi väntar på kommande period
 - **Sponsorremsa** som rullar längst ner (upp till 15 logotyper, hanteras i inställningar)
 - Allt uppdateras direkt via **WebSockets** – ingen sidomladdning krävs
 
