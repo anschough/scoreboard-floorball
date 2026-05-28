@@ -46,6 +46,61 @@
     </article>
 
     <article class="dash-card">
+      <h2>Periodlängd</h2>
+      <p class="card-hint">
+        Ange hur lång en period och eventuell övertid ska vara. Matchklockan
+        stoppar automatiskt när tiden uppnåtts (t.ex. vid <strong>20:00</strong>).
+      </p>
+      <p class="card-hint card-hint-meta">
+        <strong>Defaultinställning för period:</strong> 20 minuter<br>
+        <strong>Defaultinställning för övertid:</strong> 5 minuter
+      </p>
+
+      <div class="period-length-grid">
+        <div class="period-length-row">
+          <label for="periodLengthInput" class="period-length-label">Minuter per period</label>
+          <div class="period-length-controls">
+            <button id="btnPeriodLengthMinus" class="period-length-step" type="button"
+                    aria-label="Minska periodlängd">
+              <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+            </button>
+            <input type="number" id="periodLengthInput" class="period-length-input"
+                   min="1" max="99" step="1" value="20" inputmode="numeric">
+            <button id="btnPeriodLengthPlus" class="period-length-step" type="button"
+                    aria-label="Öka periodlängd">
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
+            <span class="period-length-unit">min</span>
+          </div>
+        </div>
+
+        <div class="period-length-row">
+          <label for="overtimeLengthInput" class="period-length-label">Minuter per övertid</label>
+          <div class="period-length-controls">
+            <button id="btnOvertimeLengthMinus" class="period-length-step" type="button"
+                    aria-label="Minska övertidslängd">
+              <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+            </button>
+            <input type="number" id="overtimeLengthInput" class="period-length-input"
+                   min="1" max="99" step="1" value="5" inputmode="numeric">
+            <button id="btnOvertimeLengthPlus" class="period-length-step" type="button"
+                    aria-label="Öka övertidslängd">
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
+            <span class="period-length-unit">min</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="period-length-actions">
+        <button id="btnSavePeriodLength" class="btn btn-primary period-length-save" disabled>
+          Spara ändringar
+        </button>
+      </div>
+      <div id="periodLengthStatus" class="fetch-status" role="status" aria-live="polite"></div>
+    </article>
+
+    <article class="dash-card">
       <header class="sponsor-card-header">
         <span class="sponsor-count-badge" id="sponsorCount" aria-live="polite">0 av 15 uppladdade logotyper</span>
         <h2>Sponsorer</h2>

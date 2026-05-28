@@ -296,6 +296,159 @@ function setStatus(msg, kind) {
   if (kind) elStatus.classList.add(kind);
 }
 
+// ── Periodlängd & övertid ────────────────────────────────────────────────────
+// Båda inställningarna hanteras parallellt i en lista och delar en
+// gemensam Spara-knapp. Värdena hämtas via socket('stateUpdate') från
+// serverns matchState (default 20 min period / 5 min övertid). Spara
+// emittar 'setPeriodLength' + 'setOvertimeLength'; servern persisterar
+// till data/settings.json.
+const PERIOD_LENGTH_MIN = 1;
+const PERIOD_LENGTH_MAX = 99;
+
+function clampPeriodLength(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(PERIOD_LENGTH_MIN, Math.min(PERIOD_LENGTH_MAX, n));
+}
+
+const periodLengthSettings = [
+  {
+    label:       'periodlängd',
+    stateKey:    'periodLengthMinutes',
+    socketEvent: 'setPeriodLength',
+    input:  document.getElementById('periodLengthInput'),
+    minus:  document.getElementById('btnPeriodLengthMinus'),
+    plus:   document.getElementById('btnPeriodLengthPlus'),
+    saved:  20
+  },
+  {
+    label:       'övertidslängd',
+    stateKey:    'overtimeLengthMinutes',
+    socketEvent: 'setOvertimeLength',
+    input:  document.getElementById('overtimeLengthInput'),
+    minus:  document.getElementById('btnOvertimeLengthMinus'),
+    plus:   document.getElementById('btnOvertimeLengthPlus'),
+    saved:  5
+  }
+];
+
+const elPeriodLengthSave   = document.getElementById('btnSavePeriodLength');
+const elPeriodLengthStatus = document.getElementById('periodLengthStatus');
+
+let periodLengthStatusTimer = null;
+let pendingSave = false;   // true mellan klick och bekräftelse från servern
+
+function currentValue(s) {
+  return clampPeriodLength(s.input.value);
+}
+
+function isSettingDirty(s) {
+  const v = currentValue(s);
+  return v != null && v !== s.saved;
+}
+
+function refreshPeriodLengthUI() {
+  let anyDirty = false;
+  for (const s of periodLengthSettings) {
+    const v = currentValue(s);
+    if (isSettingDirty(s)) anyDirty = true;
+    s.minus.disabled = v == null || v <= PERIOD_LENGTH_MIN;
+    s.plus.disabled  = v == null || v >= PERIOD_LENGTH_MAX;
+  }
+  elPeriodLengthSave.disabled = !anyDirty;
+}
+
+function setPeriodLengthStatus(msg, kind) {
+  elPeriodLengthStatus.textContent = msg || '';
+  elPeriodLengthStatus.classList.remove('fetch-status-ok', 'fetch-status-error');
+  if (kind === 'ok')    elPeriodLengthStatus.classList.add('fetch-status-ok');
+  if (kind === 'error') elPeriodLengthStatus.classList.add('fetch-status-error');
+  clearTimeout(periodLengthStatusTimer);
+  if (msg && kind === 'ok') {
+    periodLengthStatusTimer = setTimeout(() => {
+      elPeriodLengthStatus.textContent = '';
+      elPeriodLengthStatus.classList.remove('fetch-status-ok', 'fetch-status-error');
+    }, 2400);
+  }
+}
+
+for (const s of periodLengthSettings) {
+  s.input.addEventListener('input', refreshPeriodLengthUI);
+  s.input.addEventListener('blur', () => {
+    // Korrigera olagliga värden vid blur så användaren ser vad som faktiskt
+    // kommer sparas. Tom input → återgå till sparat värde.
+    const v = clampPeriodLength(s.input.value);
+    s.input.value = v != null ? v : s.saved;
+    refreshPeriodLengthUI();
+  });
+  s.minus.addEventListener('click', () => {
+    const v = currentValue(s) ?? s.saved;
+    s.input.value = Math.max(PERIOD_LENGTH_MIN, v - 1);
+    refreshPeriodLengthUI();
+  });
+  s.plus.addEventListener('click', () => {
+    const v = currentValue(s) ?? s.saved;
+    s.input.value = Math.min(PERIOD_LENGTH_MAX, v + 1);
+    refreshPeriodLengthUI();
+  });
+}
+
+elPeriodLengthSave.addEventListener('click', () => {
+  // Validera båda först så att vi inte sparar halva i taget.
+  const values = periodLengthSettings.map(s => ({ s, v: currentValue(s) }));
+  if (values.some(x => x.v == null)) {
+    setPeriodLengthStatus('Ange värden mellan 1 och 99.', 'error');
+    return;
+  }
+  // Emit endast för de som faktiskt ändrats – servern är idempotent men
+  // det sparar onödig stateUpdate-broadcast.
+  let emittedAny = false;
+  for (const { s, v } of values) {
+    if (v !== s.saved) {
+      socket.emit(s.socketEvent, { minutes: v });
+      emittedAny = true;
+    }
+  }
+  if (emittedAny) {
+    pendingSave = true;
+    setPeriodLengthStatus('Sparar…', 'loading');
+  }
+});
+
+// Init: säkerställ att +/- får rätt disabled-state innan första stateUpdate
+refreshPeriodLengthUI();
+
+socket.on('stateUpdate', (state) => {
+  if (!state) return;
+  let savedChanged = false;
+  for (const s of periodLengthSettings) {
+    const raw = state[s.stateKey];
+    if (typeof raw !== 'number') continue;
+    const incoming = clampPeriodLength(raw);
+    if (incoming == null) continue;
+    if (incoming !== s.saved) savedChanged = true;
+    s.saved = incoming;
+    // Skriv bara över input om användaren inte håller på att redigera
+    // ett osparat värde – annars förlorar de sin pågående ändring.
+    const isDirty   = isSettingDirty(s);
+    const isFocused = document.activeElement === s.input;
+    if (!isDirty && !isFocused) {
+      s.input.value = incoming;
+    }
+  }
+  // Pågående spara avslutad – alla dirty inputs har nu matchande sparade
+  // värden. Visa bekräftelse.
+  if (pendingSave && savedChanged &&
+      periodLengthSettings.every(s => !isSettingDirty(s))) {
+    const summary = periodLengthSettings
+      .map(s => `${s.label} ${s.saved} min`)
+      .join(', ');
+    setPeriodLengthStatus(`✓ Sparat (${summary}).`, 'ok');
+    pendingSave = false;
+  }
+  refreshPeriodLengthUI();
+});
+
 // ── Init: hämta sparade sponsorer ────────────────────────────────────────────
 (async () => {
   try {

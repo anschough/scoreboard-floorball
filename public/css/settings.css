@@ -361,3 +361,113 @@
 
 .fetch-status-ok    { color: var(--accent); }
 .fetch-status-error { color: var(--err); }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PERIODLÄNGD – Number-input med +/- och Spara-knapp
+   Två rader (period + övertid) staplade i ett grid, gemensam Spara-knapp.
+═══ */
+.period-length-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.period-length-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.period-length-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.period-length-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.period-length-step {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border-strong);
+  background: rgba(var(--lb-500-rgb), 0.08);
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s var(--ease-out),
+              color 0.14s var(--ease-out),
+              border-color 0.14s var(--ease-out);
+}
+.period-length-step:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--sollentuna-dark-blue);
+  border-color: var(--accent);
+}
+.period-length-step:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+.period-length-step .material-symbols-outlined { font-size: 1.4rem; }
+
+.period-length-input {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 44px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-btn);
+  color: var(--text);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 8px;
+  -moz-appearance: textfield;
+}
+.period-length-input::-webkit-outer-spin-button,
+.period-length-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.period-length-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--lb-500-rgb), 0.22);
+}
+
+.period-length-unit {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  margin-right: 4px;
+}
+
+.period-length-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.period-length-save {
+  min-width: 140px;
+}
+
+@media (max-width: 520px) {
+  .period-length-actions { justify-content: stretch; }
+  .period-length-save {
+    width: 100%;
+  }
+}
