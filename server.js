@@ -287,6 +287,13 @@ function startClock() {
   }, 1000);
 }
 
+// Döljer klockan automatiskt vid straffläggning (period 5) och visar
+// den igen vid reset till period 1.
+function applyPeriodClockRule(newPeriod) {
+  if (newPeriod === 5) matchState.clockVisible = false;
+  else if (newPeriod === 1) matchState.clockVisible = true;
+}
+
 function periodLimitSeconds() {
   // Period 4 = övertid – då gäller övertidsinställningen i stället för
   // ordinarie periodlängd. Övriga perioder (inkl. straffläggning) följer
@@ -543,7 +550,7 @@ async function pollScoreOnce() {
     if (matchState.periodSyncMode === 'api') {
       const p = extractPeriodFromIbis(data);
       if (p != null) {
-        if (p !== matchState.period) { matchState.period = p; changed = true; }
+        if (p !== matchState.period) { matchState.period = p; applyPeriodClockRule(p); changed = true; }
         matchState.periodSyncStatus = { ok: true, ts: Date.now() };
       } else {
         matchState.periodSyncStatus = {
@@ -1379,11 +1386,13 @@ io.on('connection', (socket) => {
   safeOn(socket, 'periodNext', () => {
     if (matchState.periodSyncMode === 'api') return;
     matchState.period = Math.min(5, (matchState.period || 1) + 1);
+    applyPeriodClockRule(matchState.period);
     io.emit('stateUpdate', matchState);
   });
   safeOn(socket, 'periodReset', () => {
     if (matchState.periodSyncMode === 'api') return;
     matchState.period = 1;
+    applyPeriodClockRule(1);
     io.emit('stateUpdate', matchState);
   });
 
@@ -1948,6 +1957,7 @@ app.get('/api/period/next', (_req, res) => {
     });
   }
   matchState.period = Math.min(5, (matchState.period || 1) + 1);
+  applyPeriodClockRule(matchState.period);
   broadcastState();
   res.json({ success: true, period: matchState.period });
 });
@@ -1960,6 +1970,7 @@ app.get('/api/period/reset', (_req, res) => {
     });
   }
   matchState.period = 1;
+  applyPeriodClockRule(1);
   broadcastState();
   res.json({ success: true, period: 1 });
 });
