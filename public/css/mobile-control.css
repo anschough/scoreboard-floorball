@@ -290,6 +290,9 @@ button:focus-visible,
 .mc-btn:active   { transform: scale(0.97); }
 .mc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Huvudknappen Starta/Stoppa – extra hög så man inte råkar missa på mobil */
+.mc-clock-main .mc-btn { height: 72px; font-size: 1.1rem; }
+
 .mc-btn-start:not(:disabled) {
   background: var(--green);
   color: #062012;
@@ -397,6 +400,7 @@ button:focus-visible,
   .mc-clock { font-size: 3rem; }
   .mc-period { font-size: 1.4rem; }
   .mc-btn { height: 48px; font-size: 0.9rem; }
+  .mc-clock-main .mc-btn { height: 64px; font-size: 1.05rem; }
   .mc-btn-score { height: 50px; font-size: 1.15rem; }
   .mc-card { padding: 14px 12px 16px; }
 }

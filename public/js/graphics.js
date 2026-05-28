@@ -62,6 +62,7 @@ const elIntermissionAwayName = document.getElementById('intermissionAwayName');
 const elIntermissionHomeLogo = document.getElementById('intermissionHomeLogo');
 const elIntermissionAwayLogo = document.getElementById('intermissionAwayLogo');
 const elIntermissionWaiting  = document.getElementById('intermissionWaiting');
+const elIntermissionCompetition = document.getElementById('intermissionCompetition');
 const elIntermissionScoreHome = document.getElementById('intermissionScoreHome');
 const elIntermissionScoreAway = document.getElementById('intermissionScoreAway');
 
@@ -925,6 +926,8 @@ socket.on('stateUpdate', (state) => {
 
   // Intermission-skylt: speglar fullnamn + logos från scoreboard-laget och
   // håller "VI VÄNTAR PÅ …"-texten i synk med periodvärdet i state.
+  // Serie/division överst – samma källa och design som matchup-skylten
+  if (elIntermissionCompetition) elIntermissionCompetition.textContent = state.tableName || '';
   elIntermissionHomeName.textContent = state.teamA || 'HEMMA';
   elIntermissionAwayName.textContent = state.teamB || 'BORTA';
   renderLogo(elIntermissionHomeLogo, state.homeLogo, state.teamA);
