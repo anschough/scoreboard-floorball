@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kontrollpanelen – FBC Sollentuna Broadcaster</title>
+  <title>Kontrollpanelen – FBC Sollentuna Livesändning</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/fonts.css">
@@ -19,6 +19,9 @@
     ══════════════════════════════════════════════════════════════════════ -->
     <header class="dashboard-header">
       <div class="header-top">
+        <div class="header-nav">
+          <a href="/" class="header-btn" title="Tillbaka till startsidan">Start</a>
+        </div>
         <div class="header-brand">
           <h1>Kontrollpanelen</h1>
         </div>
@@ -94,19 +97,19 @@
           <div class="form-grid-2">
             <div class="input-group">
               <label for="inputTeamA">Hemma – fullständigt namn</label>
-              <input type="text" id="inputTeamA" placeholder="t.ex. FBC Sollentuna" maxlength="40">
+              <input type="text" id="inputTeamA" placeholder="Skriv hemmalagets fullständiga namn här..." maxlength="40">
             </div>
             <div class="input-group">
               <label for="inputTeamB">Borta – fullständigt namn</label>
-              <input type="text" id="inputTeamB" placeholder="t.ex. Hagunda IF" maxlength="40">
+              <input type="text" id="inputTeamB" placeholder="Skriv bortalagets fullständiga namn här..." maxlength="40">
             </div>
             <div class="input-group">
               <label for="inputTeamAShort">Hemma – kort namn</label>
-              <input type="text" id="inputTeamAShort" placeholder="SOL" maxlength="8">
+              <input type="text" id="inputTeamAShort" placeholder="Skriv kort namn här..." maxlength="8">
             </div>
             <div class="input-group">
               <label for="inputTeamBShort">Borta – kort namn</label>
-              <input type="text" id="inputTeamBShort" placeholder="HAG" maxlength="8">
+              <input type="text" id="inputTeamBShort" placeholder="Skriv kort namn här..." maxlength="8">
             </div>
           </div>
           <button id="btnUpdateNames" class="btn btn-primary full-width">Uppdatera namn</button>
@@ -146,6 +149,10 @@
 
         <article class="dash-card live-card">
           <h2>Matchklocka</h2>
+          <p class="card-hint">
+            Glöm inte att kontrollera periodlängd i
+            <a href="settings.html" class="card-hint-link">Inställningar</a> innan matchstart.
+          </p>
           <div class="clock-display-xl" id="displayClock">00:00</div>
           <div class="clock-controls-xl">
             <button id="btnStart" class="btn-clock-xl btn-start">Starta</button>

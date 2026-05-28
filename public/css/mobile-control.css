@@ -19,6 +19,7 @@
   --bg:       var(--sollentuna-black);
   --surface:  var(--sollentuna-dark-blue);
   --border:   rgba(var(--lb-500-rgb), 0.18);
+  --border-strong: rgba(var(--lb-500-rgb), 0.32);
   --text:     var(--sollentuna-white);
   --muted:    var(--sollentuna-lb-200);
   --accent:   var(--sollentuna-lb-500);
@@ -31,6 +32,7 @@
   --red-dk:   #dc2626;
 
   --radius:   10px;
+  --radius-btn: 7px;
   --gap:      14px;
   --ease:     cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -95,6 +97,27 @@ button:focus-visible,
   padding: 4px 2px 0;
 }
 .mc-topbar-spacer { display: block; }
+.mc-topbar-btn {
+  grid-column: 1;
+  justify-self: start;
+  display: inline-block;
+  background: rgba(var(--lb-500-rgb), 0.12);
+  color: var(--accent);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-btn);
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: all 0.15s var(--ease-out, ease-out);
+}
+.mc-topbar-btn:hover,
+.mc-topbar-btn:focus-visible {
+  background: var(--accent);
+  color: var(--sollentuna-dark-blue, #002855);
+  outline: none;
+}
 .mc-title {
   grid-column: 2;
   font-size: 1rem;
@@ -234,9 +257,9 @@ button:focus-visible,
 
 .mc-sync-display {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   padding: 6px 2px;
   user-select: none;
 }
@@ -254,7 +277,7 @@ button:focus-visible,
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--accent);
-  text-align: right;
+  text-align: left;
 }
 
 .mc-sync-status {

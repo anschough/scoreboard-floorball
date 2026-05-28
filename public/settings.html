@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inställningar – FBC Sollentuna Broadcaster</title>
+  <title>Inställningar – FBC Sollentuna Livesändning</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/fonts.css">
@@ -37,12 +37,30 @@
         visas" (Shutdown source when not visible) för att spara systemresurser
         när grafiken inte används.
       </p>
-      <div class="obs-url-row">
-        <code id="obsUrl" class="obs-url">http://localhost:3000/graphics.html</code>
-        <button id="btnCopyObsUrl" class="btn btn-primary obs-url-btn"
-                title="Kopiera URL:en till urklipp">Kopiera länk</button>
+      <div class="obs-url-group">
+        <span class="obs-url-label">Matchgrafik</span>
+        <div class="obs-url-row">
+          <code id="obsUrl" class="obs-url">http://localhost:3000/graphics.html</code>
+          <button id="btnCopyObsUrl" class="btn btn-primary obs-url-btn"
+                  title="Kopiera URL:en till urklipp">Kopiera länk</button>
+        </div>
+        <div id="obsUrlStatus" class="fetch-status" role="status" aria-live="polite"></div>
       </div>
-      <div id="obsUrlStatus" class="fetch-status" role="status" aria-live="polite"></div>
+
+      <div class="obs-url-group">
+        <span class="obs-url-label">Repris-grafik</span>
+        <p class="card-hint card-hint-meta">
+          Statisk overlay som visar en <strong>"Repris"</strong>-pill längst upp
+          till vänster. Lägg in som en separat Browser Source och växla på/av
+          när repriser visas i sändningen.
+        </p>
+        <div class="obs-url-row">
+          <code id="replayUrl" class="obs-url">http://localhost:3000/replay.html</code>
+          <button id="btnCopyReplayUrl" class="btn btn-primary obs-url-btn"
+                  title="Kopiera URL:en till urklipp">Kopiera länk</button>
+        </div>
+        <div id="replayUrlStatus" class="fetch-status" role="status" aria-live="polite"></div>
+      </div>
     </article>
 
     <article class="dash-card">
@@ -254,35 +272,44 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/settings.js"></script>
   <script>
-    // ── Grafiklänk för OBS – fyll i värdens adress + kopiera-knapp ──────
+    // ── Grafiklänkar för OBS – fyll i värdens adress + kopiera-knapp ────
     (function () {
-      const urlEl    = document.getElementById('obsUrl');
-      const btn      = document.getElementById('btnCopyObsUrl');
-      const statusEl = document.getElementById('obsUrlStatus');
-      const fullUrl  = window.location.origin + '/graphics.html';
-      urlEl.textContent = fullUrl;
+      const rows = [
+        { urlId: 'obsUrl',    btnId: 'btnCopyObsUrl',    statusId: 'obsUrlStatus',    path: '/graphics.html' },
+        { urlId: 'replayUrl', btnId: 'btnCopyReplayUrl', statusId: 'replayUrlStatus', path: '/replay.html'   }
+      ];
 
-      const defaultLabel = btn.textContent;
-      let resetTimer = null;
-      btn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(fullUrl);
-          btn.textContent = 'Kopierad!';
-          btn.classList.add('is-copied');
-          statusEl.textContent = 'Länken är kopierad – klistra in i OBS Browser Source.';
-          statusEl.className   = 'fetch-status fetch-status-ok';
-        } catch (err) {
-          statusEl.textContent = 'Kunde inte kopiera automatiskt – markera fältet och kopiera manuellt.';
-          statusEl.className   = 'fetch-status fetch-status-error';
-        }
-        clearTimeout(resetTimer);
-        resetTimer = setTimeout(() => {
-          btn.textContent = defaultLabel;
-          btn.classList.remove('is-copied');
-          statusEl.textContent = '';
-          statusEl.className   = 'fetch-status';
-        }, 2400);
-      });
+      for (const row of rows) {
+        const urlEl    = document.getElementById(row.urlId);
+        const btn      = document.getElementById(row.btnId);
+        const statusEl = document.getElementById(row.statusId);
+        if (!urlEl || !btn || !statusEl) continue;
+
+        const fullUrl = window.location.origin + row.path;
+        urlEl.textContent = fullUrl;
+
+        const defaultLabel = btn.textContent;
+        let resetTimer = null;
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(fullUrl);
+            btn.textContent = 'Kopierad!';
+            btn.classList.add('is-copied');
+            statusEl.textContent = 'Länken är kopierad – klistra in i OBS Browser Source.';
+            statusEl.className   = 'fetch-status fetch-status-ok';
+          } catch (err) {
+            statusEl.textContent = 'Kunde inte kopiera automatiskt – markera fältet och kopiera manuellt.';
+            statusEl.className   = 'fetch-status fetch-status-error';
+          }
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => {
+            btn.textContent = defaultLabel;
+            btn.classList.remove('is-copied');
+            statusEl.textContent = '';
+            statusEl.className   = 'fetch-status';
+          }, 2400);
+        });
+      }
     })();
 
     // ── Stream Deck shortcuts – kopiera till urklipp ────────────────────

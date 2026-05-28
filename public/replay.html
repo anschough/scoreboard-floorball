@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repris – FBC Sollentuna Livesändning</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/fonts.css">
+  <style>
+    :root {
+      --lb-900-rgb: 91, 180, 255;
+      --replay-red: #ff3a3a;
+      --replay-red-glow: rgba(255, 58, 58, 0.55);
+      --glass-bg: rgba(10, 16, 26, 0.82);
+      --glass-border: 1px solid rgba(255, 255, 255, 0.10);
+      --glass-shadow: 0 18px 44px rgba(0, 0, 0, 0.55),
+                      0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      font-family: 'Readex Pro', 'Segoe UI', sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .replay-pill {
+      position: fixed;
+      top: 40px;
+      left: 40px;
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      padding: 22px 38px 22px 32px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border: var(--glass-border);
+      border-radius: 999px;
+      box-shadow: var(--glass-shadow);
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 1.7rem;
+      color: #fff;
+    }
+
+    .replay-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--replay-red);
+      box-shadow: 0 0 14px var(--replay-red-glow),
+                  0 0 32px var(--replay-red-glow);
+      animation: replayPulse 1.4s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes replayPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.45; transform: scale(0.85); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .replay-dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="replay-pill" role="status" aria-live="off">
+    <span class="replay-dot" aria-hidden="true"></span>
+    <span class="replay-label">Repris</span>
+  </div>
+
+</body>
+</html>
