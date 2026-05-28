@@ -9,6 +9,11 @@ const statusEl   = document.getElementById('connection-status');
 // Bildmixer (sticky header)
 const mixerBtns  = document.querySelectorAll('.mixer-btn');
 
+// Resultat-synk-toggle
+const scoreSyncBtns   = document.querySelectorAll('.score-sync-btn');
+const scoreSyncStatus = document.getElementById('scoreSyncStatus');
+const scoreButtons    = document.querySelectorAll('.btn-score-xl');
+
 // Flik 1 – Scoreboard
 const inputTeamA       = document.getElementById('inputTeamA');
 const inputTeamB       = document.getElementById('inputTeamB');
@@ -342,12 +347,12 @@ function updateActiveIndicator(key) {
 // SOCKET – ANSLUTNING
 // ════════════════════════════════════════════════════════════════════════════
 socket.on('connect', () => {
-  statusEl.textContent = 'Ansluten';
+  statusEl.textContent = 'Server ansluten';
   statusEl.className   = 'status connected';
 });
 
 socket.on('disconnect', () => {
-  statusEl.textContent = 'Frånkopplad';
+  statusEl.textContent = 'Server frånkopplad';
   statusEl.className   = 'status disconnected';
 });
 
@@ -396,6 +401,9 @@ socket.on('stateUpdate', (state) => {
 
   // Hydrera time-out-status (för operatör som ansluter mitt under en pågående)
   renderTimeOutStatus(state.timeOut);
+
+  // Resultat-synk – toggle-status + score-knapp-disable
+  applyScoreSyncState(state);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });
@@ -415,6 +423,89 @@ socket.on('graphicState', ({ activeGraphic }) => {
 socket.on('switchGraphic', ({ to }) => {
   updateActiveIndicator(to);
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// RESULTAT-SYNK (Innebandy API vs Manuell)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Senaste kända syncStatus, så vi kan re-rendera när mode växlar utan
+ *  att vänta på nästa stateUpdate. */
+let latestScoreSyncStatus = null;
+let latestScoreSyncMode   = 'api';
+let latestSyncMatchId     = null;
+
+scoreSyncBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.mode;
+    if (mode !== 'api' && mode !== 'manual') return;
+    if (mode === latestScoreSyncMode) return;
+    socket.emit('setScoreSyncMode', { mode });
+  });
+});
+
+socket.on('scoreSyncStatus', (status) => {
+  latestScoreSyncStatus = status || null;
+  renderScoreSyncUI();
+});
+
+function applyScoreSyncState(state) {
+  latestScoreSyncMode   = state.scoreSyncMode === 'manual' ? 'manual' : 'api';
+  latestSyncMatchId     = state.syncMatchId || null;
+  latestScoreSyncStatus = state.scoreSyncStatus || latestScoreSyncStatus;
+  renderScoreSyncUI();
+}
+
+function renderScoreSyncUI() {
+  // Markera aktiv toggle-knapp
+  scoreSyncBtns.forEach(btn => {
+    const active = btn.dataset.mode === latestScoreSyncMode;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  // Inaktivera +/− i API-mode (även när ingen match är hämtad – då finns
+  // ändå inget att räkna med och status-texten förklarar varför).
+  const disable = latestScoreSyncMode === 'api';
+  scoreButtons.forEach(btn => {
+    btn.disabled = disable;
+    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+  });
+  // I API-mode döljs knapparna helt – disabled-statet är då bara defensivt
+  // skydd om man tabb:ar till en knapp via tangentbord.
+  document.querySelector('.score-board-xl')?.classList.toggle('is-api-sync', disable);
+
+  // Status-text
+  if (!scoreSyncStatus) return;
+  scoreSyncStatus.classList.remove('is-ok', 'is-error');
+  if (latestScoreSyncMode === 'manual') {
+    scoreSyncStatus.textContent = 'Manuell hantering – använd +1/−1.';
+    return;
+  }
+  if (!latestSyncMatchId) {
+    scoreSyncStatus.textContent = 'Hämta en match från IBIS för att starta synken.';
+    return;
+  }
+  if (latestScoreSyncStatus && latestScoreSyncStatus.ok) {
+    const ts = formatSyncClock(latestScoreSyncStatus.ts);
+    scoreSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    scoreSyncStatus.classList.add('is-ok');
+    return;
+  }
+  if (latestScoreSyncStatus && latestScoreSyncStatus.error) {
+    scoreSyncStatus.textContent = `Synk-fel: ${latestScoreSyncStatus.error}`;
+    scoreSyncStatus.classList.add('is-error');
+    return;
+  }
+  scoreSyncStatus.textContent = 'Hämtar från Innebandy API…';
+}
+
+function formatSyncClock(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // FLIK 1 – SCOREBOARD

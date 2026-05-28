@@ -222,3 +222,47 @@
 .header-btn-stacked-right {
   margin-left: auto;
 }
+
+/* ── Grafiklänk för OBS – kopiera-rad ───────────────────────────────────── */
+.obs-url-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.obs-url {
+  flex: 1 1 320px;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-btn);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  color: var(--text);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+  display: flex;
+  align-items: center;
+}
+
+.obs-url-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-width: 140px;
+  transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out);
+}
+.obs-url-btn.is-copied {
+  background: #16a34a;
+  color: #FFFFFF;
+}
+.obs-url-btn.is-copied:hover {
+  background: #15803d;
+}
+
+.fetch-status-ok    { color: var(--accent); }
+.fetch-status-error { color: var(--err); }

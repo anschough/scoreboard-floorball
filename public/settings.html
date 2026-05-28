@@ -15,14 +15,27 @@
       <a href="control.html" class="header-btn">← Tillbaka</a>
       <h1>Inställningar</h1>
       <span id="connection-status" class="status disconnected" role="status" aria-live="polite">Ansluter…</span>
-      <a href="api-docs.html" target="_blank" rel="noopener" class="header-btn header-btn-stacked-right"
-         title="Visa alla Stream Deck-genvägar">
-        Stream Deck shortcuts<span class="visually-hidden"> (öppnas i ny flik)</span>
-      </a>
     </div>
   </header>
 
   <main class="docs-main">
+
+    <article class="dash-card">
+      <h2>Grafiklänk för OBS Studio</h2>
+      <p class="card-hint">
+        Kopiera URL:en nedan och lägg in den som
+        <strong>Browser Source</strong> i OBS Studio så visas grafiken
+        i sändningen. Använd t.ex. <strong>1920 × 1080</strong> som
+        bredd/höjd och kryssa i <strong>"Shutdown source when not visible"</strong>
+        för att spara resurser.
+      </p>
+      <div class="obs-url-row">
+        <code id="obsUrl" class="obs-url">http://localhost:3000/graphics.html</code>
+        <button id="btnCopyObsUrl" class="btn btn-primary obs-url-btn"
+                title="Kopiera URL:en till urklipp">Kopiera länk</button>
+      </div>
+      <div id="obsUrlStatus" class="fetch-status" role="status" aria-live="polite"></div>
+    </article>
 
     <article class="dash-card">
       <h2>Sponsorlogotyper</h2>
@@ -73,9 +86,173 @@
       </div>
     </article>
 
+    <article class="dash-card docs-card">
+      <h2>Stream Deck shortcuts</h2>
+      <p class="card-hint">
+        Klicka på en shortcut nedan för att kopiera hela URL:en till urklipp.
+        Denna URL ska sedan läggas till i Stream Deck via funktionen
+        <strong>System → Website</strong>. Glöm inte att markera
+        <strong>"GET request in background"</strong> när du klistrat in din URL.
+      </p>
+
+      <div class="api-base">
+        <span class="api-base-label">Bas-URL</span>
+        <code id="apiBaseUrl">http://localhost:3000</code>
+      </div>
+
+      <div class="docs-grid">
+
+        <div class="api-group">
+          <h3>Resultat</h3>
+          <table class="api-table">
+            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/score/home/add</code></td><td>Hemmalag +1</td></tr>
+              <tr><td><code class="api-route">/api/score/home/sub</code></td><td>Hemmalag −1</td></tr>
+              <tr><td><code class="api-route">/api/score/away/add</code></td><td>Bortalag +1</td></tr>
+              <tr><td><code class="api-route">/api/score/away/sub</code></td><td>Bortalag −1</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Matchklocka</h3>
+          <table class="api-table">
+            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/clock/start</code></td><td>Starta</td></tr>
+              <tr><td><code class="api-route">/api/clock/pause</code></td><td>Pausa</td></tr>
+              <tr><td><code class="api-route">/api/clock/reset</code></td><td>Nollställ</td></tr>
+              <tr><td><code class="api-route">/api/clock/toggle_visibility</code></td><td>Dölj/visa klockan</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Grafik</h3>
+          <table class="api-table">
+            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/graphic/scoreboard</code></td><td>Scoreboard</td></tr>
+              <tr><td><code class="api-route">/api/graphic/lineupHome</code></td><td>Hemmalag</td></tr>
+              <tr><td><code class="api-route">/api/graphic/lineupAway</code></td><td>Bortalag</td></tr>
+              <tr><td><code class="api-route">/api/graphic/table</code></td><td>Serietabell</td></tr>
+              <tr><td><code class="api-route">/api/graphic/fixtures</code></td><td>Omgångens matcher</td></tr>
+              <tr><td><code class="api-route">/api/graphic/commentators</code></td><td>Visa kommentatorsskylten (slår alltid på, döljer inte)</td></tr>
+              <tr><td><code class="api-route">/api/graphic/commentators/toggle</code></td><td>Växla kommentatorsskylten av/på — en knapp för båda (av = scoreboard)</td></tr>
+              <tr><td><code class="api-route">/api/graphic/matchup</code></td><td>Inför/Paus</td></tr>
+              <tr><td><code class="api-route">/api/graphic/intermission</code></td><td>Pausvila (räknar ut nästa period)</td></tr>
+              <tr><td><code class="api-route">/api/graphic/preGameStats</code></td><td>Statistik inför match</td></tr>
+              <tr><td><code class="api-route">/api/graphic/clear</code></td><td>Göm allt</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Utvisningar</h3>
+          <table class="api-table">
+            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/penalty/home/add?minutes=2</code></td><td>Hemma – 2 min utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/home/add?minutes=5</code></td><td>Hemma – 5 min utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/away/add?minutes=2</code></td><td>Borta – 2 min utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/away/add?minutes=5</code></td><td>Borta – 5 min utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/home/remove?id=ID</code></td><td>Ta bort hemma-utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/away/remove?id=ID</code></td><td>Ta bort borta-utvisning</td></tr>
+              <tr><td><code class="api-route">/api/penalty/home/clear</code></td><td>Rensa hemma-utvisningar</td></tr>
+              <tr><td><code class="api-route">/api/penalty/away/clear</code></td><td>Rensa borta-utvisningar</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="api-group">
+          <h3>Period &amp; Status</h3>
+          <table class="api-table">
+            <thead><tr><th>Shortcut URL</th><th>Effekt</th></tr></thead>
+            <tbody>
+              <tr><td><code class="api-route">/api/period/next</code></td><td>Stega period (kapas vid 5)</td></tr>
+              <tr><td><code class="api-route">/api/period/reset</code></td><td>Period → 1</td></tr>
+              <tr><td><code class="api-route">/api/state</code></td><td>Hela state-snapshoten (JSON)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </article>
+
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/settings.js"></script>
+  <script>
+    // ── Grafiklänk för OBS – fyll i värdens adress + kopiera-knapp ──────
+    (function () {
+      const urlEl    = document.getElementById('obsUrl');
+      const btn      = document.getElementById('btnCopyObsUrl');
+      const statusEl = document.getElementById('obsUrlStatus');
+      const fullUrl  = window.location.origin + '/graphics.html';
+      urlEl.textContent = fullUrl;
+
+      const defaultLabel = btn.textContent;
+      let resetTimer = null;
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(fullUrl);
+          btn.textContent = 'Kopierad!';
+          btn.classList.add('is-copied');
+          statusEl.textContent = 'Länken är kopierad – klistra in i OBS Browser Source.';
+          statusEl.className   = 'fetch-status fetch-status-ok';
+        } catch (err) {
+          statusEl.textContent = 'Kunde inte kopiera automatiskt – markera fältet och kopiera manuellt.';
+          statusEl.className   = 'fetch-status fetch-status-error';
+        }
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => {
+          btn.textContent = defaultLabel;
+          btn.classList.remove('is-copied');
+          statusEl.textContent = '';
+          statusEl.className   = 'fetch-status';
+        }, 2400);
+      });
+    })();
+
+    // ── Stream Deck shortcuts – kopiera till urklipp ────────────────────
+    document.getElementById('apiBaseUrl').textContent = window.location.origin;
+
+    document.querySelectorAll('.api-route').forEach(el => {
+      el.dataset.url = el.textContent.trim();
+      el.setAttribute('title', 'Klicka för att kopiera hela URL:en');
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+    });
+
+    async function copyRoute(codeEl) {
+      const fullUrl = window.location.origin + (codeEl.dataset.url || codeEl.textContent.trim());
+      codeEl.classList.remove('copied', 'copy-failed');
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        codeEl.classList.add('copied');
+      } catch (err) {
+        console.error('Kunde inte kopiera:', err);
+        codeEl.classList.add('copy-failed');
+      }
+      clearTimeout(codeEl._copyTimer);
+      codeEl._copyTimer = setTimeout(() => {
+        codeEl.classList.remove('copied', 'copy-failed');
+      }, 1600);
+    }
+
+    document.addEventListener('click', (e) => {
+      const codeEl = e.target.closest('.api-route');
+      if (codeEl) copyRoute(codeEl);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const codeEl = e.target.closest && e.target.closest('.api-route');
+      if (!codeEl) return;
+      e.preventDefault();
+      copyRoute(codeEl);
+    });
+  </script>
 </body>
 </html>
