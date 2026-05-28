@@ -489,3 +489,14 @@
     width: 100%;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TICKER-TEST – knapprad i settings.html. Popups visas i graphics.html.
+   ═══ */
+.ticker-test-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  margin-bottom: 10px;
+}

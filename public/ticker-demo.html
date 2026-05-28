@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <title>Övriga matcher – ticker demo</title>
+  <style>
+    :root {
+      --bg-dark:    #0a1020;
+      --bg-card:    rgba(8, 14, 25, 0.94);
+      --accent:     #ffcc00;
+      --home:       #25c2ff;
+      --away:       #ff6b6b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', 'Readex Pro', system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 20% 30%, #1f2c4d 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, #2c1a3a 0%, transparent 55%),
+        linear-gradient(135deg, #050912 0%, #0e1730 100%);
+      color: #fff;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Mock-spelfilm för att illustrera kontexten */
+    .ice-overlay {
+      position: fixed;
+      inset: 0;
+      background:
+        repeating-linear-gradient(90deg,
+          transparent 0 80px,
+          rgba(255,255,255,0.02) 80px 81px),
+        repeating-linear-gradient(0deg,
+          transparent 0 80px,
+          rgba(255,255,255,0.02) 80px 81px);
+      pointer-events: none;
+    }
+
+    /* Huvud-scoreboard (matchen producenten streamar) */
+    .scoreboard {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card);
+      padding: 16px 32px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      box-shadow: 0 12px 32px rgba(0,0,0,.55);
+      backdrop-filter: blur(8px);
+      border-top: 3px solid var(--accent);
+    }
+    .scoreboard .team {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .scoreboard .score {
+      font-size: 36px;
+      font-weight: 800;
+      padding: 0 18px;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .scoreboard .period {
+      font-size: 14px;
+      opacity: .85;
+      padding-left: 16px;
+      border-left: 1px solid rgba(255,255,255,.18);
+      font-variant-numeric: tabular-nums;
+    }
+    .scoreboard .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ff2244;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    @keyframes blink { 50% { opacity: .25; } }
+
+    /* Ticker-container — där popups dyker upp */
+    #ticker-container {
+      position: fixed;
+      top: 90px;
+      right: 36px;
+      width: 380px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .ticker-popup {
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: var(--bg-card);
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 10px 28px rgba(0,0,0,.5);
+      backdrop-filter: blur(8px);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "team   time"
+        "score  score"
+        "scorer scorer"
+        "assist assist";
+      gap: 4px 12px;
+      animation: tickerPopIn 0.45s cubic-bezier(.22,1,.36,1) both;
+    }
+    .ticker-popup.is-leaving { animation: tickerPopOut 0.3s ease-in both; }
+
+    .ticker-popup-team   { grid-area: team;   font-weight: 700; font-size: 15px; color: var(--accent); letter-spacing: .3px; }
+    .ticker-popup-time   { grid-area: time;   font-size: 12px;  opacity: .75; font-variant-numeric: tabular-nums; }
+    .ticker-popup-score  { grid-area: score;  font-size: 14px;  opacity: .92; }
+    .ticker-popup-scorer { grid-area: scorer; font-size: 14px;  font-weight: 600; margin-top: 4px; }
+    .ticker-popup-assist { grid-area: assist; font-size: 12px;  opacity: .7; }
+
+    @keyframes tickerPopIn {
+      from { transform: translateX(40px) scale(.96); opacity: 0; }
+      to   { transform: translateX(0)    scale(1);   opacity: 1; }
+    }
+    @keyframes tickerPopOut {
+      to { transform: translateX(40px); opacity: 0; }
+    }
+
+    /* Demo-kontroller */
+    .demo-banner {
+      position: fixed;
+      top: 20px;
+      left: 24px;
+      background: rgba(255,0,80,.92);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .demo-controls {
+      position: fixed;
+      top: 60px;
+      left: 24px;
+      background: var(--bg-card);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      max-width: 340px;
+      line-height: 1.5;
+    }
+    .demo-controls button {
+      background: var(--accent);
+      color: #000;
+      border: 0;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .demo-log {
+      position: fixed;
+      bottom: 20px;
+      left: 24px;
+      font-size: 11px;
+      opacity: .6;
+      max-width: 480px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="ice-overlay"></div>
+
+  <div class="demo-banner">Demo · ticker mockad</div>
+  <div class="demo-controls">
+    <strong>Ticker-demo</strong><br>
+    Pollar mockat <code>/api/series/12345/live</code> – stegar genom 3 frames.
+    Den match producenten själv streamar (matchId&nbsp;999) ska aldrig
+    generera en popup.
+    <button id="btn-advance">Trigga nästa poll</button>
+  </div>
+
+  <!-- Huvud-scoreboard: matchen som streamas just nu -->
+  <div class="scoreboard">
+    <span class="team">STORVRETA</span>
+    <span class="score">2 – 1</span>
+    <span class="team">LINKÖPING</span>
+    <span class="period"><span class="live-dot"></span>LIVE · P2 · 12:34</span>
+  </div>
+
+  <!-- Här dyker tickern upp -->
+  <div id="ticker-container" aria-live="polite"></div>
+
+  <div class="demo-log" id="demo-log"></div>
+
+  <script src="/js/other-matches-ticker.js"></script>
+  <script>
+    /*
+     * Mockat svar från /api/series/:competitionId/live.
+     * Varje "frame" är vad servern skulle returnera vid en given poll.
+     * Tickern jämför svar mot föregående snapshot — frame 0 sätter baselinen
+     * (inga popups), frame 1 och 2 innehåller nya mål → popups triggas.
+     */
+    const frames = [
+      // Frame 0 – baseline. Inga popups förväntas (första svaret blir baseline).
+      { matches: [
+        { matchId: 101, homeTeam: 'Pixbo',   awayTeam: 'Falun',     homeGoals: 0, awayGoals: 2, status: 'Live', period: 2, periodTime: '03:11', lastGoal: null },
+        { matchId: 102, homeTeam: 'Mullsjö', awayTeam: 'IBK Dalen', homeGoals: 3, awayGoals: 1, status: 'Live', period: 2, periodTime: '15:40', lastGoal: null },
+        { matchId: 103, homeTeam: 'Sollen',  awayTeam: 'Rosers',    homeGoals: 1, awayGoals: 1, status: 'Live', period: 1, periodTime: '12:08', lastGoal: null },
+        // Den här matchen är "vår egen" — ska exkluderas via currentMatchId
+        { matchId: 999, homeTeam: 'Storvreta', awayTeam: 'Linköping', homeGoals: 2, awayGoals: 1, status: 'Live', period: 2, periodTime: '12:34', lastGoal: null }
+      ] },
+
+      // Frame 1 – Mullsjö gör 4-1, Sollen gör 1-2 (Rosers borta-mål utan assist).
+      // Storvreta (vår egen) får också ett mål men ska INTE visas i tickern.
+      { matches: [
+        { matchId: 101, homeTeam: 'Pixbo',   awayTeam: 'Falun',     homeGoals: 0, awayGoals: 2, status: 'Live', period: 2, periodTime: '04:55', lastGoal: null },
+        { matchId: 102, homeTeam: 'Mullsjö', awayTeam: 'IBK Dalen', homeGoals: 4, awayGoals: 1, status: 'Live', period: 2, periodTime: '17:24',
+          lastGoal: { scoringTeam: 'home', scorer: { jersey: '24', name: 'Albin Sjögren' },
+                      assist: { jersey: '7',  name: 'Joel Hedlund' }, period: 2, periodTime: '17:24' } },
+        { matchId: 103, homeTeam: 'Sollen',  awayTeam: 'Rosers',    homeGoals: 1, awayGoals: 2, status: 'Live', period: 1, periodTime: '14:55',
+          lastGoal: { scoringTeam: 'away', scorer: { jersey: '88', name: 'Felix Patrikson' },
+                      assist: null, period: 1, periodTime: '14:55' } },
+        // "Vår egen" har också gjort mål → ska filtreras bort av tickern
+        { matchId: 999, homeTeam: 'Storvreta', awayTeam: 'Linköping', homeGoals: 3, awayGoals: 1, status: 'Live', period: 2, periodTime: '13:32', lastGoal: null }
+      ] },
+
+      // Frame 2 – Pixbo reducerar (1-2), IBK Dalen kvitterar (4-4 mot Mullsjö).
+      { matches: [
+        { matchId: 101, homeTeam: 'Pixbo',   awayTeam: 'Falun',     homeGoals: 1, awayGoals: 2, status: 'Live', period: 2, periodTime: '08:14',
+          lastGoal: { scoringTeam: 'home', scorer: { jersey: '11', name: 'Linus Carlsson' },
+                      assist: { jersey: '21', name: 'Emil Johansson' }, period: 2, periodTime: '08:14' } },
+        { matchId: 102, homeTeam: 'Mullsjö', awayTeam: 'IBK Dalen', homeGoals: 4, awayGoals: 4, status: 'Live', period: 3, periodTime: '02:11',
+          lastGoal: { scoringTeam: 'away', scorer: { jersey: '17', name: 'Oliver Nyqvist' },
+                      assist: { jersey: '4',  name: 'Jakob Berg' }, period: 3, periodTime: '02:11' } },
+        { matchId: 103, homeTeam: 'Sollen',  awayTeam: 'Rosers',    homeGoals: 1, awayGoals: 2, status: 'Live', period: 2, periodTime: '01:30', lastGoal: null },
+        { matchId: 999, homeTeam: 'Storvreta', awayTeam: 'Linköping', homeGoals: 3, awayGoals: 1, status: 'Live', period: 2, periodTime: '15:00', lastGoal: null }
+      ] }
+    ];
+
+    // Mocka fetch — bara för /api/series/.../live. Allt annat går till riktig server.
+    let frameIdx = 0;
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url && url.includes('/api/series/') && url.includes('/live')) {
+        const frame = frames[Math.min(frameIdx++, frames.length - 1)];
+        return new Response(JSON.stringify(frame), {
+          status: 200, headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return realFetch(input, init);
+    };
+
+    const log = (msg) => {
+      const el = document.getElementById('demo-log');
+      const ts = new Date().toLocaleTimeString('sv-SE');
+      el.textContent = `[${ts}] ${msg}\n` + el.textContent.split('\n').slice(0, 12).join('\n');
+    };
+
+    const ticker = new OtherMatchesTicker({
+      endpoint:      '/api/series/12345/live?currentMatchId=999',
+      currentMatchId: 999,
+      intervalMs:    5000,         // 5 s i demon (i produktion: 30 s)
+      onGoal:   (g) => {
+        renderTickerPopup(document.getElementById('ticker-container'), g, { lifetimeMs: 12000 });
+        const team = g.scoringTeam === 'home' ? g.homeTeam : g.awayTeam;
+        log(`⚽ MÅL ${team}: #${g.scorer?.jersey} ${g.scorer?.name} (${g.homeTeam} ${g.scoreHome}–${g.scoreAway} ${g.awayTeam})`);
+      },
+      onUpdate: (m) => log(`↻ Poll mottagen — ${m.length} live-matcher (exkl. vår egen)`),
+      onError:  (e) => log(`❌ Polling-fel: ${e.message}`)
+    });
+    ticker.start();
+
+    // Manuell stepping från demo-knappen
+    document.getElementById('btn-advance').addEventListener('click', () => ticker.forcePoll());
+
+    // Exponera för programmatisk åtkomst i tester
+    window._demo = { ticker, frames, advance: () => ticker.forcePoll(), reset: () => { frameIdx = 0; } };
+  </script>
+</body>
+</html>

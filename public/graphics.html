@@ -119,12 +119,18 @@
          class="player-lt-panel"
          aria-hidden="true">
     <div class="player-lt-inner">
-      <span class="player-lt-team" id="playerLtTeam"></span>
-      <div class="player-lt-row">
-        <span class="player-lt-num" id="playerLtNum"></span>
-        <div class="player-lt-text">
-          <span class="player-lt-name" id="playerLtName"></span>
-          <span class="player-lt-role" id="playerLtRole"></span>
+      <!-- Foto från IBIS (ImageUrl). Döljs via [hidden] när URL saknas. -->
+      <div class="player-lt-photo" id="playerLtPhoto" hidden>
+        <img id="playerLtImage" alt="" referrerpolicy="no-referrer">
+      </div>
+      <div class="player-lt-body">
+        <span class="player-lt-team" id="playerLtTeam"></span>
+        <div class="player-lt-row">
+          <span class="player-lt-num" id="playerLtNum"></span>
+          <div class="player-lt-text">
+            <span class="player-lt-name" id="playerLtName"></span>
+            <span class="player-lt-role" id="playerLtRole"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -240,7 +246,13 @@
     <div class="sponsor-track" id="sponsorTrack"></div>
   </div>
 
+  <!-- ── "Övriga matcher"-ticker (nedre högra hörnet) ──────────────────
+       Visas bara när scoreboarden är aktiv. En popup åt gången, 5 s var,
+       resten köas. Styrs av graphics.js via TickerQueue. -->
+  <div id="ticker-container" class="ticker-floating" aria-hidden="true"></div>
+
   <script src="/socket.io/socket.io.js"></script>
+  <script src="js/other-matches-ticker.js"></script>
   <script src="js/graphics.js"></script>
 </body>
 </html>

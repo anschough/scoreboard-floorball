@@ -780,17 +780,24 @@ function renderPreviewPlayers(containerEl, players, ctx) {
     const div   = document.createElement('div');
     div.className = 'preview-player' + (clickable ? ' is-clickable' : '');
 
-    const parts  = player.trim().split(/\s+/);
-    const hasNum = parts.length > 1 && /^\d+$/.test(parts[0]);
-
+    // Spelare är objekt { shirtNo, name, imageUrl } från servern. Stötta även
+    // ren-sträng-formatet som fallback ifall någon legacy-bana skickar in det.
     let number = '';
-    let name   = player;
-    if (hasNum) {
-      number = parts.shift();
-      name   = parts.join(' ');
+    let name   = '';
+    if (player && typeof player === 'object') {
+      number = player.shirtNo ? String(player.shirtNo) : '';
+      name   = player.name || '';
+    } else if (typeof player === 'string') {
+      const parts  = player.trim().split(/\s+/);
+      const hasNum = parts.length > 1 && /^\d+$/.test(parts[0]);
+      if (hasNum) { number = parts.shift(); name = parts.join(' '); }
+      else        { name   = player; }
+    }
+
+    if (number) {
       div.innerHTML = `<span class="preview-player-num">${escapeHtml(number)}</span>${escapeHtml(name)}`;
     } else {
-      div.textContent = player;
+      div.textContent = name;
     }
 
     if (clickable) {

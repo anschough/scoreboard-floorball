@@ -267,6 +267,27 @@
       </div>
     </article>
 
+    <article class="dash-card">
+      <h2>Resultat övriga matcher</h2>
+      <p class="card-hint">
+        Liveresultat från övriga matcher i samma serie visas automatiskt i
+        tickern när Scoreboard är aktiv. Klicka på "Testa ett mål" för att
+        skicka ett testmål till grafiken, eller klicka på "Testa flera mål"
+        för att se om köhanteringen fungerar.
+      </p>
+      <p class="card-hint">
+        OBS: Målen i tickern visas ett i taget under 5 sekunder vardera. Om
+        fler mål görs samtidigt köas målen och visas i turordning.
+      </p>
+
+      <div class="ticker-test-controls">
+        <button id="btnTickerOne"   class="btn btn-primary"   type="button">Testa ett mål</button>
+        <button id="btnTickerSeq"   class="btn btn-secondary" type="button">Testa flera mål</button>
+        <button id="btnTickerClear" class="btn btn-secondary" type="button">Stoppa testet</button>
+      </div>
+      <div id="tickerTestStatus" class="fetch-status" role="status" aria-live="polite"></div>
+    </article>
+
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -349,6 +370,62 @@
       e.preventDefault();
       copyRoute(codeEl);
     });
+
+    // ── Ticker-test – skickar mockade mål till graphics.html via socket ─────
+    // Testerna renderar inte popups lokalt; servern relayar varje "tickerTestGoal"
+    // till alla anslutna grafik-klienter där popupen visas (om scoreboarden
+    // är aktiv just då).
+    (function () {
+      const statusEl = document.getElementById('tickerTestStatus');
+      if (!statusEl || typeof socket === 'undefined') return;
+
+      let statusTimer = null;
+      function setStatus(text, kind = '') {
+        statusEl.textContent = text || '';
+        statusEl.className   = 'fetch-status' + (kind ? ' fetch-status-' + kind : '');
+        clearTimeout(statusTimer);
+        if (text && kind !== 'error') {
+          statusTimer = setTimeout(() => setStatus(''), 4000);
+        }
+      }
+
+      // Pool av påhittade mål. Slumpas så två klick i rad ger olika popups.
+      const mockGoals = [
+        { homeTeam: 'Storvreta', awayTeam: 'Linköping', scoringTeam: 'home',
+          scorer: { jersey: '24', name: 'Albin Sjögren' },
+          assist: { jersey: '7',  name: 'Joel Hedlund' },
+          period: 2, periodTime: '17:24', scoreHome: 4, scoreAway: 1 },
+        { homeTeam: 'Pixbo', awayTeam: 'Falun', scoringTeam: 'away',
+          scorer: { jersey: '88', name: 'Felix Patrikson' },
+          assist: null,
+          period: 1, periodTime: '14:55', scoreHome: 0, scoreAway: 3 },
+        { homeTeam: 'Mullsjö', awayTeam: 'IBK Dalen', scoringTeam: 'away',
+          scorer: { jersey: '17', name: 'Oliver Nyqvist' },
+          assist: { jersey: '4',  name: 'Jakob Berg' },
+          period: 3, periodTime: '02:11', scoreHome: 4, scoreAway: 4 },
+        { homeTeam: 'FBC Sollentuna', awayTeam: 'Rosersberg Arlanda IBK', scoringTeam: 'home',
+          scorer: { jersey: '11', name: 'Linus Carlsson' },
+          assist: { jersey: '21', name: 'Emil Johansson' },
+          period: 2, periodTime: '08:14', scoreHome: 2, scoreAway: 1 }
+      ];
+
+      document.getElementById('btnTickerOne').addEventListener('click', () => {
+        const goal = mockGoals[Math.floor(Math.random() * mockGoals.length)];
+        socket.emit('tickerTestGoal', goal);
+        setStatus(`Skickade testmål: ${goal.homeTeam} ${goal.scoreHome}–${goal.scoreAway} ${goal.awayTeam}.`, 'ok');
+      });
+
+      document.getElementById('btnTickerSeq').addEventListener('click', () => {
+        // Skicka alla 4 omedelbart — graphics.html köar dem och visar en åt gången
+        mockGoals.forEach(g => socket.emit('tickerTestGoal', g));
+        setStatus('Skickade 4 testmål (visas en åt gången i 5 s vardera).', 'ok');
+      });
+
+      document.getElementById('btnTickerClear').addEventListener('click', () => {
+        socket.emit('tickerTestClear');
+        setStatus('Test stoppat.');
+      });
+    })();
   </script>
 </body>
 </html>
