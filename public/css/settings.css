@@ -12,12 +12,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-md);
 }
 .sponsor-actions-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-md);
 }
 .dash-card .fetch-status:empty { display: none; }
 
@@ -27,7 +27,7 @@
      de bitarna så .btn / .btn-secondary får styra utseendet. */
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
   cursor: pointer;
   text-transform: none;
 }
@@ -65,14 +65,14 @@
   display: inline-flex;
   align-items: center;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
   background: #16a34a;
   color: #fff;
-  border: 1px solid #15803d;
+  border: var(--bw-1) solid #15803d;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   z-index: 2;
   transition: background 0.18s var(--ease-out),
@@ -89,7 +89,7 @@
 .sponsor-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  gap: var(--space-lg);
   margin-bottom: 10px;
 }
 .sponsor-list:empty { display: none; }
@@ -99,12 +99,12 @@
 .sponsor-card {
   position: relative;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border);
+  border: var(--bw-1) solid var(--border);
   border-radius: var(--radius-card);
   padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   cursor: grab;
   transition: border-color 0.15s, background 0.15s, transform 0.15s, opacity 0.15s;
 }
@@ -146,7 +146,7 @@
     rgba(0, 0, 0, 0.25);
   background-size: 14px 14px;
   background-position: 0 0, 7px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   height: 100px;
   display: flex;
   align-items: center;
@@ -171,14 +171,14 @@
 
 .sponsor-card-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .sponsor-action {
   flex: 1;
   background: rgba(var(--lb-500-rgb), 0.08);
   color: var(--accent);
-  border: 1px solid var(--border);
+  border: var(--bw-1) solid var(--border);
   border-radius: 5px;
   padding: 6px 8px;
   font-size: 0.8rem;
@@ -229,7 +229,7 @@
   .sponsor-actions { align-items: stretch; }
   .sponsor-actions-buttons {
     flex-direction: column-reverse;
-    gap: 8px;
+    gap: var(--space-sm);
   }
   .sponsor-add-btn,
   .sponsor-save-btn {
@@ -250,8 +250,8 @@
 .sponsor-preview-strip {
   /* Speglar live-stripens mörkblå bakgrund */
   background: rgba(var(--dark-blue-rgb), 1);
-  border: 1px solid rgba(var(--lb-500-rgb), 0.18);
-  border-radius: 8px;
+  border: var(--bw-1) solid rgba(var(--lb-500-rgb), 0.18);
+  border-radius: var(--radius-md);
   height: 78px;
   overflow: hidden;
   position: relative;
@@ -322,12 +322,12 @@
 .obs-url-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 .obs-url-group + .obs-url-group {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw-1) solid var(--border);
 }
 .obs-url-label {
   font-size: 0.72rem;
@@ -340,7 +340,7 @@
 .obs-url-row {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 
@@ -348,7 +348,7 @@
   flex: 1 1 320px;
   min-width: 0;
   background: rgba(0, 0, 0, 0.42);
-  border: 1px solid var(--border-strong);
+  border: var(--bw-1) solid var(--border-strong);
   border-radius: var(--radius-btn);
   padding: 12px 14px;
   font-size: 0.95rem;
@@ -388,14 +388,14 @@
 .period-length-grid {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-xl);
   margin-top: 8px;
 }
 
 .period-length-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-md);
 }
 
 .period-length-label {
@@ -409,7 +409,7 @@
 .period-length-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 
@@ -418,7 +418,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--radius-btn);
-  border: 1px solid var(--border-strong);
+  border: var(--bw-1) solid var(--border-strong);
   background: rgba(var(--lb-500-rgb), 0.08);
   color: var(--accent);
   cursor: pointer;
@@ -445,7 +445,7 @@
   width: 96px;
   height: 44px;
   background: rgba(0, 0, 0, 0.42);
-  border: 1px solid var(--border-strong);
+  border: var(--bw-1) solid var(--border-strong);
   border-radius: var(--radius-btn);
   color: var(--text);
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -496,7 +496,7 @@
 .ticker-test-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-md);
   margin-top: 14px;
   margin-bottom: 10px;
 }

@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Repris – FBC Sollentuna Livesändning</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/fonts.css">
   <style>
+    /* Repris-specifika toner. Palett, --lb-900-rgb m.m. kommer från tokens.css.
+       Glaset är något tätare här än det delade --glass-* (medvetet). */
     :root {
-      --lb-900-rgb: 91, 180, 255;
       --replay-red: #ff3a3a;
       --replay-red-glow: rgba(255, 58, 58, 0.55);
       --glass-bg: rgba(10, 16, 26, 0.82);
-      --glass-border: 1px solid rgba(255, 255, 255, 0.10);
+      --glass-border: var(--bw-1) solid rgba(255, 255, 255, 0.10);
       --glass-shadow: 0 18px 44px rgba(0, 0, 0, 0.55),
                       0 0 0 1px rgba(255, 255, 255, 0.05) inset;
     }

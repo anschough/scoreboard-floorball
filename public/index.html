@@ -7,23 +7,25 @@
   <title>FBC Sollentuna Livesändning</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="apple-touch-icon" href="img/favicon.png">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/icons.css">
   <style>
+    /* Ljust landningstema – egna toner ovanpå den delade paletten (tokens.css).
+       Delade färger pekar på paletten; sidspecifika värden ligger kvar. */
     :root {
       --sky:           #7DC0F0;
       --sky-hi:        #9FD3F8;
       --sky-soft:      #BFE2FB;
-      --dark-blue:     #00263E;
+      --dark-blue:     var(--sollentuna-dark-blue);
       --dark-blue-hi:  #003E66;
-      --ink:           #00263E;
-      --ink-soft:      rgba(0, 38, 62, 0.78);
-      --ink-muted:     rgba(0, 38, 62, 0.55);
-      --accent:        #00263E;
-      --on-dark:       #FFFFFF;
-      --radius-card:   16px;
-      --ease:          cubic-bezier(0.22, 1, 0.36, 1);
-      --ease-snap:     cubic-bezier(0.34, 1.56, 0.64, 1);
+      --ink:           var(--sollentuna-dark-blue);
+      --ink-soft:      rgba(var(--dark-blue-rgb), 0.78);
+      --ink-muted:     rgba(var(--dark-blue-rgb), 0.55);
+      --accent:        var(--sollentuna-dark-blue);
+      --on-dark:       var(--sollentuna-white);
+      --radius-card:   16px;  /* större kort på landningssidan (override av delade 8px) */
+      --ease-snap:     cubic-bezier(0.34, 1.56, 0.64, 1);  /* sidspecifik studs */
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
