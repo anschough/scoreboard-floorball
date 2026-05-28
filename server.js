@@ -1498,7 +1498,7 @@ function addPenalty(team, minutes, jersey, forceQueued = false) {
     duration,
     // queued-poster startar inte ticka – vi sätter remaining till duration
     // när de promoteras (så de alltid får full tid när de aktiveras).
-    remaining: isQueued ? duration : duration,
+    remaining: duration,
     status:    isQueued ? 'queued' : 'active',
     jersey:    typeof jersey === 'string' ? jersey.trim().slice(0, 3) : ''
   };

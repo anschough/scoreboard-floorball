@@ -200,7 +200,7 @@ function renderScoreSyncUI() {
   if (!scoreSyncStatus) return;
   scoreSyncStatus.classList.remove('is-ok', 'is-error');
   if (latestScoreSyncMode === 'manual') {
-    scoreSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen.';
+    scoreSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen eller här i liverapporteringen.';
     return;
   }
   if (!latestSyncMatchId) {
@@ -263,7 +263,7 @@ function renderPeriodSyncUI() {
   if (!periodSyncStatus) return;
   periodSyncStatus.classList.remove('is-ok', 'is-error');
   if (latestPeriodSyncMode === 'manual') {
-    periodSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen.';
+    periodSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen eller här i liverapporteringen.';
     return;
   }
   if (!latestSyncMatchId) {
