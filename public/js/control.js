@@ -90,6 +90,11 @@ const previewFixturesList  = document.getElementById('previewFixturesList');
 const btnClearFixtures     = document.getElementById('btnClearFixtures');
 const btnSendFixtures      = document.getElementById('btnSendFixtures');
 
+// Live-monitor (read-only) – speglar grafikens ticker + omgångens resultat
+const liveMonitorBox = document.getElementById('liveMonitorBox');
+const tickerFeedList = document.getElementById('tickerFeedList');
+const liveResultsList = document.getElementById('liveResultsList');
+
 // Flik 3 – Statistik inför match-förhandsvisning (read-only)
 const previewPreGame      = document.getElementById('previewPreGame');
 const pgPreviewHomeName   = document.getElementById('pgPreviewHomeName');
@@ -106,6 +111,13 @@ let pendingIbHome         = { name: '', players: [], leaders: [] };
 let pendingIbAway         = { name: '', players: [], leaders: [] };
 let pendingFixtures       = { title: '', fixtures: [] };
 let pendingPreGameStats   = null;
+// Live-monitor: rullande buffert av senaste ticker-mål (nyaste först)
+const TICKER_FEED_MAX     = 8;
+let tickerFeed            = [];
+// Omgångens matcher + live-status (matchId → live-objekt från IBIS-pollen)
+let currentRoundFixtures  = [];
+let liveStatusMap         = new Map();
+let liveSeriesTimer       = null;
 // Senast valda spelar-/ledar-skylt – för visuell highlight + toggle
 let activeLowerThirdKey = '';
 
@@ -197,8 +209,22 @@ function renderPenaltyList(listEl, penalties) {
   }
 }
 
-// Måste matcha MAX_PENALTIES_PER_TEAM i server.js
+// Måste matcha MAX_PENALTIES_PER_TEAM i server.js (räknas i grupper)
 const MAX_PENALTIES_PER_TEAM = 2;
+
+// Räkna utvisningsgrupper: en 2+2 (poster med samma pairId) = 1 grupp.
+function countPenaltyGroups(arr) {
+  const pairs = new Set();
+  let n = 0;
+  for (const p of arr) {
+    if (p.pairId) {
+      if (!pairs.has(p.pairId)) { pairs.add(p.pairId); n++; }
+    } else {
+      n++;
+    }
+  }
+  return n;
+}
 
 function updatePenaltyCounts(home, away) {
   // Visar antal AKTIVA + antal köade (om några), så operatören vet
@@ -211,19 +237,18 @@ function updatePenaltyCounts(home, away) {
   };
   penaltyHomeCount.textContent = fmt(home);
   penaltyAwayCount.textContent = fmt(away);
-  // Disabla knappar när cap är nådd – 2+2 kräver dessutom 2 lediga platser.
+  // Disabla knappar när cap (2 grupper) är nådd. En 2+2 räknas som 1 grupp.
   updatePenaltyButtons('home', home);
   updatePenaltyButtons('away', away);
 }
 
 function updatePenaltyButtons(team, arr) {
-  const slotsLeft = MAX_PENALTIES_PER_TEAM - arr.length;
+  const groups = countPenaltyGroups(arr);
+  const full   = groups >= MAX_PENALTIES_PER_TEAM;
   document.querySelectorAll(`.btn-penalty[data-team="${team}"]`).forEach(btn => {
-    const needsTwo = btn.dataset.kind === 'double';
-    const required = needsTwo ? 2 : 1;
-    btn.disabled = slotsLeft < required;
-    btn.title = btn.disabled
-      ? `Lagets utvisningar fulla (${arr.length}/${MAX_PENALTIES_PER_TEAM})`
+    btn.disabled = full;
+    btn.title = full
+      ? `Lagets utvisningar fulla (${groups}/${MAX_PENALTIES_PER_TEAM})`
       : (btn.dataset.kind === 'double'
           ? '2+2: lägger två 2-min där andra startar när första går ut'
           : '');
@@ -759,6 +784,13 @@ socket.on('matchStateReset', () => {
   lastHydrateTable      = '';
   lastHydrateFixtures   = '';
   lastHydratePreGame    = '';
+  // Live-monitor: töm ticker-feed + resultat + stoppa pollning
+  tickerFeed = [];
+  renderTickerFeed();
+  currentRoundFixtures = [];
+  stopLiveSeriesPoll();
+  if (liveResultsList) liveResultsList.innerHTML = '';
+  refreshLiveMonitorVisibility();
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -883,6 +915,136 @@ function renderPreviewFixtures(containerEl, fixtures) {
       </span>`;
     containerEl.appendChild(row);
   });
+}
+
+// ── Live-monitor: ticker-feed + omgångens resultat (read-only) ──────────────
+// Visar samma mål-events som grafikens ticker (socket 'tickerGoal') i en
+// rullande lista + omgångens senaste resultat. Boxen visas så fort det finns
+// ett mål i feeden ELLER fixtures i state.
+
+/** Visar boxen om feeden eller resultatlistan har innehåll, annars empty-text. */
+function refreshLiveMonitorVisibility() {
+  if (!liveMonitorBox) return;
+  const hasData = tickerFeed.length > 0 || currentRoundFixtures.length > 0;
+  liveMonitorBox.hidden = !hasData;
+}
+
+/** Renderar ticker-feeden. Alla IBIS-fält escape:as innan innerHTML. */
+function renderTickerFeed() {
+  if (!tickerFeedList) return;
+  if (!tickerFeed.length) {
+    tickerFeedList.innerHTML =
+      '<p class="live-monitor-empty">Väntar på mål från andra matcher…</p>';
+    return;
+  }
+  tickerFeedList.innerHTML = tickerFeed.map(g => {
+    const team   = g.scoringTeam === 'home' ? g.homeTeam : g.awayTeam;
+    const score  = `${escapeHtml(g.homeTeam)} ${escapeHtml(g.scoreHome)}–${escapeHtml(g.scoreAway)} ${escapeHtml(g.awayTeam)}`;
+    const scorer = g.scorer ? `${escapeHtml(g.scorer.jersey)} ${escapeHtml(g.scorer.name)}`.trim() : 'Mål';
+    const assist = g.assist ? `Pass: ${escapeHtml(g.assist.jersey)} ${escapeHtml(g.assist.name)}`.trim() : '';
+    const time   = g.periodTime ? `P${escapeHtml(g.period ?? '?')} · ${escapeHtml(g.periodTime)}` : '';
+    return `
+      <div class="ticker-feed-row">
+        <div class="tf-head">
+          <span class="tf-team">⚽ ${escapeHtml(team)}</span>
+          ${time ? `<span class="tf-time">${time}</span>` : ''}
+        </div>
+        <div class="tf-score">${score}</div>
+        <div class="tf-scorer">${scorer}${assist ? ` · ${assist}` : ''}</div>
+      </div>`;
+  }).join('');
+}
+
+socket.on('tickerGoal', (goal) => {
+  if (!goal || typeof goal !== 'object') return;
+  tickerFeed.unshift(goal);
+  if (tickerFeed.length > TICKER_FEED_MAX) tickerFeed.length = TICKER_FEED_MAX;
+  renderTickerFeed();
+  refreshLiveMonitorVisibility();
+});
+
+socket.on('tickerClear', () => {
+  tickerFeed = [];
+  renderTickerFeed();
+  refreshLiveMonitorVisibility();
+});
+
+renderTickerFeed();  // initial placeholder så boxen ser komplett ut direkt
+
+/** Renderar ENDAST pågående (live) matcher med resultat + tid. Saknas live-
+ *  matcher visas en text. Logotyper berikas från fixtures via matchId. */
+function renderRoundStatus() {
+  if (!liveResultsList) return;
+  liveResultsList.innerHTML = '';
+
+  const fixtureById = new Map(
+    currentRoundFixtures.map(f => [String(f.matchId), f])
+  );
+
+  if (!liveStatusMap.size) {
+    liveResultsList.innerHTML =
+      '<p class="live-monitor-empty">Inga andra pågående matcher just nu…</p>';
+    refreshLiveMonitorVisibility();
+    return;
+  }
+
+  liveStatusMap.forEach((lv) => {
+    const f    = fixtureById.get(String(lv.matchId)) || {};
+    const home = lv.homeTeam ?? f.homeTeam ?? '';
+    const away = lv.awayTeam ?? f.awayTeam ?? '';
+    const lh = f.homeLogo ? `<img class="pf-logo" src="${escapeHtml(f.homeLogo)}" alt="">` : '';
+    const la = f.awayLogo ? `<img class="pf-logo" src="${escapeHtml(f.awayLogo)}" alt="">` : '';
+    const time = lv.periodTime
+      ? `P${escapeHtml(lv.period ?? '?')} · ${escapeHtml(lv.periodTime)}`
+      : `P${escapeHtml(lv.period ?? '?')}`;
+    const badge  = '<span class="rf-badge rf-badge-live"><span class="rf-dot"></span>LIVE</span>';
+    const middle = `<span class="pf-result rf-live-score">${escapeHtml(lv.homeGoals)}–${escapeHtml(lv.awayGoals)}</span>` +
+                   `<span class="rf-live-time">${time}</span>`;
+
+    const row = document.createElement('div');
+    row.className = 'round-fixture rf-live';
+    row.innerHTML = `
+      <span class="rf-status">${badge}</span>
+      <span class="pf-home"><span class="pf-name">${escapeHtml(home)}</span>${lh}</span>
+      <span class="pf-middle">${middle}</span>
+      <span class="pf-away">${la}<span class="pf-name">${escapeHtml(away)}</span></span>`;
+    liveResultsList.appendChild(row);
+  });
+  refreshLiveMonitorVisibility();
+}
+
+/** Plockar competitionId ur match-URL:en (input-fältet eller localStorage). */
+function parseCompetitionId() {
+  let url = (typeof urlMatchAll !== 'undefined' && urlMatchAll?.value || '').trim();
+  if (!url) { try { url = localStorage.getItem(LS_URL_KEY) || ''; } catch (_) {} }
+  const m = url.match(/\/sasong\/\d+\/(?:serie|turnering)\/(\d+)\//);
+  return m ? m[1] : null;
+}
+
+/** Hämtar live-matcher för serien och uppdaterar statuslistan. */
+async function pollLiveSeries() {
+  const cid = parseCompetitionId();
+  if (!cid) return;
+  try {
+    const res = await fetch(`/api/series/${cid}/live`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    const data = await res.json();
+    const arr  = Array.isArray(data?.matches) ? data.matches : [];
+    liveStatusMap = new Map(arr.map(m => [String(m.matchId), m]));
+    renderRoundStatus();
+  } catch (_) { /* tyst – nästa poll försöker igen */ }
+}
+
+/** Startar pollning (var 30:e s) om vi har en serie att fråga om. */
+function startLiveSeriesPoll() {
+  if (liveSeriesTimer || !parseCompetitionId()) return;
+  pollLiveSeries();
+  liveSeriesTimer = setInterval(pollLiveSeries, 30_000);
+}
+
+function stopLiveSeriesPoll() {
+  if (liveSeriesTimer) { clearInterval(liveSeriesTimer); liveSeriesTimer = null; }
+  liveStatusMap = new Map();
 }
 
 /**
@@ -1069,6 +1231,13 @@ function hydratePreviewsFromState(state) {
       ? `${state.fixturesTitle} – ${state.fixtures.length} matcher`
       : `${state.fixtures.length} matcher`;
     previewFixtures.hidden = false;
+  }
+  // Live-monitor: omgångens matcher med live-status (read-only).
+  if (liveResultsList) {
+    currentRoundFixtures = state.fixtures?.length ? state.fixtures : [];
+    renderRoundStatus();
+    if (currentRoundFixtures.length) startLiveSeriesPoll();
+    else                             stopLiveSeriesPoll();
   }
   if (state.preGameStats) {
     const preGameKey = JSON.stringify(state.preGameStats);

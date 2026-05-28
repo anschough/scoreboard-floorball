@@ -390,7 +390,7 @@
           <div class="scroll-body">
             <div id="previewPreGame" class="preview-box" hidden>
               <div class="preview-header">
-                <span class="ib-lineup-side">Skrapat från IBIS</span>
+                <span class="ib-lineup-side">Hämtad från IBIS</span>
                 <button id="btnClearPreGame" class="btn-clear"
                         aria-label="Rensa statistik" title="Rensa">
                   <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -431,6 +431,26 @@
               </button>
             </div>
             <p class="scroll-empty">Ingen data är hämtad från IBIS ännu…</p>
+          </div>
+        </article>
+
+        <article class="dash-card scroll-card">
+          <h2>Pågående matcher just nu</h2>
+          <div class="scroll-body">
+            <div id="liveMonitorBox" class="preview-box" hidden>
+              <div class="preview-header">
+                <span class="ib-lineup-side">Senaste händelser</span>
+              </div>
+              <div class="live-monitor-section">
+                <span class="live-monitor-label">Ticker · senaste mål</span>
+                <div id="tickerFeedList" class="ticker-feed-list"></div>
+              </div>
+              <div class="live-monitor-section">
+                <span class="live-monitor-label">Matchresultat – Pågående matcher</span>
+                <div id="liveResultsList" class="preview-fixtures-list"></div>
+              </div>
+            </div>
+            <p class="scroll-empty">Inga ticker-mål eller resultat ännu…</p>
           </div>
         </article>
 

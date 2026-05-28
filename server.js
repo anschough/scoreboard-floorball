@@ -48,6 +48,10 @@ let matchState = {
   tableName: '',
   fixtures: [],
   fixturesTitle: '',     // t.ex. "Omgång 22"
+  // CompetitionID (serie/turnering) för omgångens matcher. Sätts när en
+  // match-URL hämtas och används av grafiken för att polla live-status på
+  // de övriga matcherna i omgången. null = ingen serie kopplad.
+  fixturesCompetitionId: null,
   commentators: { name1: '', name2: '' },
   venue: '',
   homeLogo: '',
@@ -307,12 +311,13 @@ function periodLimitSeconds() {
 
 // ── Utvisningslogik ──────────────────────────────────────────────────────────
 // Modell: varje utvisning har status 'active' (tickar och syns i grafiken)
-// eller 'queued' (väntar tills en aktiv löper ut). Hård cap på totalen:
-// MAX_PENALTIES_PER_TEAM = 2 entries per lag (regeln 3-mot-5 som minst).
-// Det innebär t.ex. att 2+2 (som lägger 2 entries) bara går att lägga om
-// laget har 0 entries sedan tidigare. Försök därutöver avvisas.
-// MAX_ACTIVE_PENALTIES = 2 håller dessutom att max 2 tickar samtidigt –
-// relevant för 2+2 där andra halvan startar när första löper ut.
+// eller 'queued' (väntar tills en aktiv löper ut). Hård cap räknas i
+// "grupper" (utvisningstyper), inte enskilda entries: en vanlig 2/5-min är
+// 1 grupp, en 2+2 är 1 grupp (två entries med samma pairId). Caps:
+// MAX_PENALTIES_PER_TEAM = 2 grupper per lag, så man kan lägga t.ex. 2+2
+// plus en 2-min samtidigt. MAX_ACTIVE_PENALTIES = 2 håller att max 2 tickar
+// samtidigt (regeln 3-mot-5 som minst) – relevant för 2+2 där andra halvan
+// startar när första löper ut.
 //
 // Säker array-mutation: iterera BAKIFRÅN och splice. Då kan vi ta bort
 // element under iterationen utan att indexen skiftar – två utvisningar som
@@ -323,6 +328,21 @@ const MAX_ACTIVE_PENALTIES   = 2;
 function countActive(arr) {
   let n = 0;
   for (const p of arr) if (p.status === 'active') n++;
+  return n;
+}
+
+// Räkna utvisningsgrupper: poster med samma pairId (2+2) räknas som EN grupp,
+// övriga som var sin grupp. Används för cap-kontrollen.
+function countGroups(arr) {
+  const pairs = new Set();
+  let n = 0;
+  for (const p of arr) {
+    if (p.pairId) {
+      if (!pairs.has(p.pairId)) { pairs.add(p.pairId); n++; }
+    } else {
+      n++;
+    }
+  }
   return n;
 }
 
@@ -420,6 +440,7 @@ function resetMatchState() {
     tableName: '',
     fixtures: [],
     fixturesTitle: '',
+    fixturesCompetitionId: null,
     commentators: { name1: '', name2: '' },
     venue: '',
     homeLogo: '',
@@ -1548,6 +1569,11 @@ io.on('connection', (socket) => {
         if (matchState.scoreSyncMode === 'api') startScoreSyncPoll();
       }
 
+      // Spara competitionId så grafiken kan polla live-status på omgångens
+      // övriga matcher via /api/series/:competitionId/live.
+      const compMatch = url.match(/\/(?:serie|turnering)\/(\d+)\//);
+      matchState.fixturesCompetitionId = compMatch ? parseInt(compMatch[1], 10) : null;
+
       io.emit('stateUpdate', matchState);
 
       socket.emit('fetch_result_innebandy_all_data', data);
@@ -1700,11 +1726,13 @@ function broadcastPenalties() {
 
 // addPenalty: forceQueued tvingar status='queued' oavsett aktivt-count
 // (används för andra halvan av 2+2 så den hamnar bakom första 2-min:en).
-// Returnerar null om laget redan har MAX_PENALTIES_PER_TEAM entries.
-function addPenalty(team, minutes, jersey, forceQueued = false) {
+// bypassCap hoppar över grupp-capen (addDoubleMinor gör en egen kontroll
+// upfront och lägger två entries i samma grupp).
+// Returnerar null om laget redan har MAX_PENALTIES_PER_TEAM grupper.
+function addPenalty(team, minutes, jersey, forceQueued = false, bypassCap = false) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
-  if (arr.length >= MAX_PENALTIES_PER_TEAM) return null;
+  if (!bypassCap && countGroups(arr) >= MAX_PENALTIES_PER_TEAM) return null;
   const m = parseInt(minutes, 10);
   if (!ALLOWED_PENALTY_MINUTES.has(m)) return null;
 
@@ -1725,16 +1753,15 @@ function addPenalty(team, minutes, jersey, forceQueued = false) {
 }
 
 // 2+2-utvisning: två 2-min-poster där den ANDRA alltid är queued direkt.
-// Båda får samma pairId så grafiken kan rendera dem sida vid sida.
-// Kräver att laget har plats för BÅDA – avvisas annars (alternativet
-// vore att lägga bara första och tappa andra, vilket är förvirrande).
+// Båda får samma pairId så grafiken kan rendera dem sida vid sida och
+// caps:en räknar dem som EN grupp. Kräver plats för en grupp till.
 function addDoubleMinor(team, jersey) {
   const arr = penaltyArrayFor(team);
   if (!arr) return null;
-  if (arr.length + 2 > MAX_PENALTIES_PER_TEAM) return null;
-  const first  = addPenalty(team, 2, jersey, false);
+  if (countGroups(arr) >= MAX_PENALTIES_PER_TEAM) return null;
+  const first  = addPenalty(team, 2, jersey, false, true);
   if (!first) return null;
-  const second = addPenalty(team, 2, jersey, true);
+  const second = addPenalty(team, 2, jersey, true, true);
   if (second) {
     const pairId = `pair-${first.id}-${second.id}`;
     first.pairId  = pairId;

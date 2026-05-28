@@ -521,8 +521,9 @@ function formatFixtureTime(iso) {
 
 /**
  * Renderar omgångens matcher. Varje rad är ett grid:
- * [hemma-namn + logo] [resultat/tid] [borta-logo + namn]
- * Vinnare markeras i highlight-blå, ospelade visar datum + tid.
+ * [status-badge] [hemma-namn + logo] [resultat/tid] [borta-logo + namn]
+ * Live-matcher (från fixturesLiveMap) får grön "Live"-badge + pågående
+ * resultat, färdigspelade en blå "Färdigspelad"-badge, ospelade datum + tid.
  */
 function renderFixtures(fixtures) {
   elFixturesList.innerHTML = '';
@@ -535,8 +536,17 @@ function renderFixtures(fixtures) {
     const logoHome = f.homeLogo ? `<img class="fix-team-logo" src="${escapeHtmlGfx(f.homeLogo)}" alt="" loading="lazy">` : '';
     const logoAway = f.awayLogo ? `<img class="fix-team-logo" src="${escapeHtmlGfx(f.awayLogo)}" alt="" loading="lazy">` : '';
 
-    let middleHtml;
-    if (f.isFinished) {
+    const live = fixturesLiveMap.get(String(f.matchId));
+
+    let middleHtml, badgeHtml;
+    if (live) {
+      badgeHtml = '<span class="fix-badge fix-badge-live"><span class="fix-badge-dot"></span>Live</span>';
+      middleHtml = `
+        <div class="fix-result fix-result-live">
+          <span>${escapeHtmlGfx(live.homeGoals)}</span><span class="fix-score-sep">–</span><span>${escapeHtmlGfx(live.awayGoals)}</span>
+        </div>`;
+    } else if (f.isFinished) {
+      badgeHtml = '<span class="fix-badge fix-badge-finished">Färdigspelad</span>';
       const hWin = f.homeGoals > f.awayGoals ? 'fix-score-winner' : '';
       const aWin = f.awayGoals > f.homeGoals ? 'fix-score-winner' : '';
       middleHtml = `
@@ -544,6 +554,7 @@ function renderFixtures(fixtures) {
           <span class="${hWin}">${escapeHtmlGfx(f.homeGoals)}</span><span class="fix-score-sep">–</span><span class="${aWin}">${escapeHtmlGfx(f.awayGoals)}</span>
         </div>`;
     } else {
+      badgeHtml = '';
       const { date, time } = formatFixtureTime(f.matchDateTime);
       // date/time formaterades av vår egen kod – säkra strängar utan användarinnehåll
       middleHtml = `
@@ -554,6 +565,7 @@ function renderFixtures(fixtures) {
     }
 
     row.innerHTML = `
+      <div class="fix-status">${badgeHtml}</div>
       <div class="fix-side fix-side-home">
         <span class="fix-team-name">${escapeHtmlGfx(f.homeTeam)}</span>
         ${logoHome}
@@ -565,6 +577,42 @@ function renderFixtures(fixtures) {
       </div>`;
     elFixturesList.appendChild(row);
   });
+}
+
+// ── Live-status på omgångens matcher ────────────────────────────────────────
+// Grafiken pollar /api/series/:competitionId/live (samma endpoint som
+// kontrollpanelen) och markerar matcher som pågår just nu. Pollen körs bara
+// medan fixtures-listan har innehåll och ett competitionId är känt.
+const FIXTURES_LIVE_POLL_MS = 30000;
+let fixturesLiveMap   = new Map();
+let fixturesLiveTimer = null;
+let fixturesLiveComp  = null;
+let lastFixturesArr   = [];
+
+async function pollFixturesLive() {
+  if (!fixturesLiveComp) return;
+  try {
+    const res = await fetch(`/api/series/${fixturesLiveComp}/live`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const arr  = Array.isArray(data.matches) ? data.matches : [];
+    fixturesLiveMap = new Map(arr.map(m => [String(m.matchId), m]));
+    renderFixtures(lastFixturesArr);
+  } catch (_) { /* nätfel – behåll tidigare status, försök igen nästa tick */ }
+}
+
+function startFixturesLivePoll(competitionId) {
+  if (fixturesLiveComp === competitionId && fixturesLiveTimer) return;
+  fixturesLiveComp = competitionId;
+  if (fixturesLiveTimer) clearInterval(fixturesLiveTimer);
+  pollFixturesLive();
+  fixturesLiveTimer = setInterval(pollFixturesLive, FIXTURES_LIVE_POLL_MS);
+}
+
+function stopFixturesLivePoll() {
+  if (fixturesLiveTimer) { clearInterval(fixturesLiveTimer); fixturesLiveTimer = null; }
+  fixturesLiveComp = null;
+  if (fixturesLiveMap.size) { fixturesLiveMap = new Map(); renderFixtures(lastFixturesArr); }
 }
 
 /**
@@ -841,13 +889,21 @@ socket.on('stateUpdate', (state) => {
   // Omgångens matcher
   const fixturesJson = JSON.stringify(state.fixtures || []);
   if (fixturesJson !== lastFixturesJson) {
-    renderFixtures(state.fixtures || []);
+    lastFixturesArr = state.fixtures || [];
+    renderFixtures(lastFixturesArr);
     lastFixturesJson = fixturesJson;
   }
   elFixturesTitle.textContent = state.fixturesTitle || 'Spelprogram';
 
-  // Klock-visibility (default = true om fältet saknas i äldre state)
-  const showClock = state.clockVisible !== false;
+  // Live-status på omgångens matcher: polla så länge vi har matcher + serie.
+  const compId = state.fixturesCompetitionId;
+  if (compId && lastFixturesArr.length) startFixturesLivePoll(compId);
+  else stopFixturesLivePoll();
+
+  // Klock-visibility (default = true om fältet saknas i äldre state).
+  // Vid Straffar (period 5) finns ingen matchklocka – dölj alltid, oavsett
+  // clockVisible-toggeln, så att bara "Straffar" visas.
+  const showClock = state.clockVisible !== false && p !== 5;
   elScoreboard.classList.toggle('clock-hidden', !showClock);
 
   // Kommentator-skylt: text + visa endast namn som har innehåll
