@@ -45,7 +45,7 @@
 
 html, body {
   height: 100%;
-  overflow: hidden;        /* dashboarden sköter scrollen själv */
+  overflow: hidden;        /* dashboarden sköter scrollen själv (override på mobil) */
 }
 
 body {
@@ -112,8 +112,14 @@ h2 {
 .dashboard {
   display: flex;
   flex-direction: column;
+  /* 100vh inkluderar iOS-URL-baren = klipper innehåll. 100dvh följer
+     den synliga viewporten (URL-baren auto-döljer/visar) på alla moderna
+     mobilläsare; 100vh som fallback för äldre. */
   height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  /* width: 100% i stället för 100vw – 100vw räknar in en eventuell vertikal
+     scrollbar på desktop och kan ge horisontell overflow med 1–17 px. */
+  width: 100%;
 }
 
 
@@ -341,7 +347,10 @@ h2 {
 ═══ */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 1.35fr 1.1fr;
+  /* minmax(0, ...) i stället för naken fr – utan 0-min expanderar spår förbi
+     viewporten om någon ättling har min-content > spårbredden (klassiskt
+     CSS Grid-overflow på mobil). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1.1fr);
   gap: 14px;
   padding: 14px;
   flex: 1 1 auto;
@@ -354,6 +363,10 @@ h2 {
   flex-direction: column;
   gap: 14px;
   min-height: 0;
+  /* min-width: 0 låter kolumnen krympa under sina barns min-content i grid –
+     utan denna kan kolumnen expandera och spilla ut horisontellt på smala
+     skärmar. */
+  min-width: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -449,7 +462,9 @@ input[type="url"] {
   border-radius: var(--radius-btn);
   color: var(--sollentuna-dark-blue);
   font-family: inherit;
-  font-size: 0.95rem;
+  /* 16px = iOS Safari/Chrome zoomar inte in vid fokus. Mindre värden trigar
+     auto-zoom när användaren tappar i fältet — irriterande på telefon. */
+  font-size: 16px;
   font-weight: 500;
   padding: 10px 13px;
   outline: none;
@@ -1494,23 +1509,104 @@ input[type="text"].input-clock-set.input-error {
 
 /* ══════════════════════════════════════════════════════════════════════════
    RESPONSIVT
-═══ */
+═══════════════════════════════════════════════════════════════════════════
+   Breakpoints:
+     ≤1280  Tre kolumner kollapsar till en, sidan får naturlig scroll
+     ≤720   En-hands-läge: form-grid kollapsar, score-board staplas, header wrappar
+     ≤480   Liten mobil: timeout-knappar stapel, klock-justering 2x2, mindre padding
+     ≤360   iPhone SE / extra smalt: skala ner XL-displayer
+*/
 @media (max-width: 1280px) {
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    /* minmax(0,1fr) ist. f. 1fr – ser till att kolumnen aldrig växer förbi
+       viewport-bredden ens när långa rubriker/inputs har stor min-content. */
+    grid-template-columns: minmax(0, 1fr);
     overflow-y: auto;
   }
   .dash-col { overflow-y: visible; padding-right: 0; }
   .scroll-card { min-height: auto; }
-  html, body { overflow: auto; }
-  .dashboard { height: auto; min-height: 100vh; }
+  /* Låt dokumentet sköta scrollen – nästade scroll-containrar (html+body+dashboard)
+     bryter sticky-headern på iOS och ger ibland dubbla scrollbars. */
+  html, body { overflow: visible; height: auto; }
+  .dashboard {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
 }
 
 @media (max-width: 720px) {
   .form-grid-2 { grid-template-columns: 1fr; }
   .ib-lineup-grid { grid-template-columns: 1fr; }
   .header-top { flex-wrap: wrap; }
-  .score-board-xl { grid-template-columns: 1fr; }
+  /* Tillåt header-meta att (a) radbryta sina knappar och (b) krympa i parent-flexet –
+     utan att ta bort flex-shrink: 0 stannar Ansluten/Öppna grafik/Inställningar
+     på en rad och klipps mot höger viewport-kant. */
+  .header-meta {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  /* Score-board behåller hemma/borta sida vid sida – VS-mellankolumnen göms
+     så att de två score-sidorna får all bredd; minmax(0,1fr) ser till att
+     sidorna kan krympa under sin natural width och inte spilla ut. */
+  .score-board-xl {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
   .score-vs { display: none; }
   .header-brand h1 { font-size: 1rem; }
+}
+
+@media (max-width: 480px) {
+  /* Tightare padding så innehållet får mer plats horisontellt. */
+  .dashboard-grid { padding: 10px; gap: 10px; }
+  .dashboard-header { padding: 10px 12px 12px; }
+  .dash-card { padding: 14px 14px 16px; }
+  .dash-col-live .dash-card.live-card { padding: 14px 14px 18px; }
+
+  /* Time-out-knapparna har långa svenska etiketter ("Starta för hemma") –
+     stapla dem i stället för 3 trånga kolumner. */
+  .timeout-buttons { grid-template-columns: 1fr; gap: 8px; }
+
+  /* Klock-justeringsraden går från 4 trånga kolumner till 2x2 så MM:SS-fältet
+     och "Justera tid" får andas. */
+  .clock-adjust-row { grid-template-columns: 1fr 1fr; }
+
+  /* Klock-display: 4rem är för stort på 360px-skärmar, krymp lite. */
+  .clock-display-xl { font-size: 3rem; margin-bottom: 12px; }
+
+  /* Score-display + knappar – krymp så hemma/borta-paret ryms sida vid sida.
+     Knapp-bredden går från fix 78 → fluid (auto via score-buttons-grid) så
+     varje knapp tar halva sidan med utan att spilla över. */
+  .score-board-xl { gap: 8px; }
+  .score-display-xl { font-size: 3.2rem; }
+  .score-side { gap: 8px; }
+  .score-buttons {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .btn-score-xl { width: 100%; height: 52px; font-size: 1.15rem; }
+
+  /* Period-knappar — låt dem ta hela raden om "Period 1" + 2 knappar inte ryms. */
+  .period-row { flex-direction: column; align-items: stretch; }
+  .period-buttons { justify-content: stretch; }
+  .period-buttons .btn { flex: 1 1 0; }
+
+  /* Penalty-knapparnas etiketter får mindre font när 4 kolumner ligger på en smal yta. */
+  .btn-penalty { font-size: 0.74rem; padding: 9px 4px; }
+  .penalty-add-row { grid-template-columns: 44px 1fr 1fr 1fr; gap: 4px; }
+}
+
+@media (max-width: 360px) {
+  .header-brand h1 { font-size: 0.92rem; }
+  .clock-display-xl { font-size: 2.6rem; }
+  .score-display-xl { font-size: 2.6rem; }
+  .btn-score-xl { height: 48px; font-size: 1rem; }
+  .score-team { font-size: 0.72rem; }
+  /* Klock-justering vid extremt smalt: 2 kolumner (oförändrat från @480). */
+  .clock-adjust-row { grid-template-columns: 1fr 1fr; }
 }
