@@ -10,6 +10,10 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
+// Healthcheck för Render m.fl. Svarar omedelbart utan att röra annan logik
+// så att portdetekteringen och deploy-health-check alltid lyckas snabbt.
+app.get('/healthz', (_req, res) => res.status(200).type('text/plain').send('ok'));
+
 // JSON-parser för sponsor-uppladdningar (data-URL:er på upp till ~5 MB/st × 10).
 // Sätts före static så att API-rutterna nedan kan läsa req.body.
 app.use(express.json({ limit: '60mb' }));
