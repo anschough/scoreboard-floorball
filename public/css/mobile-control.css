@@ -105,9 +105,9 @@ button:focus-visible,
   border-radius: 999px;
 }
 .mc-status-on {
-  background: rgba(var(--lb-900-rgb), 0.18);
-  color: var(--accent-hi);
-  border: 1px solid rgba(var(--lb-900-rgb), 0.4);
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ADE80;
+  border: 1px solid rgba(34, 197, 94, 0.45);
 }
 .mc-status-off {
   background: rgba(255, 107, 107, 0.15);
@@ -202,6 +202,63 @@ button:focus-visible,
   border: 1px solid rgba(var(--lb-500-rgb), 0.32);
 }
 .mc-btn-score.mc-btn-minus:hover { background: rgba(0, 0, 0, 0.7); }
+
+.mc-btn-score:disabled,
+.mc-btn-score[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.35;
+  filter: grayscale(0.4);
+  pointer-events: none;
+}
+
+/* I API-synk-mode tar vi bort +/−-knapparna helt – producenten behöver dem
+   inte och det renar upp layouten. */
+.mc-score.is-api-sync .mc-score-btns { display: none; }
+
+/* ── Resultat-synk-display (read-only, styrs från kontrollpanelen) ──── */
+.mc-sync-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin: -2px 0 12px;
+}
+
+.mc-sync-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 2px;
+  user-select: none;
+}
+
+.mc-sync-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mc-sync-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-align: right;
+}
+
+.mc-sync-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-align: left;
+  min-height: 1em;
+  padding: 0 2px;
+}
+.mc-sync-status.is-ok    { color: var(--accent-hi); }
+.mc-sync-status.is-error { color: var(--err); }
 
 /* ── Klocka ───────────────────────────────────────────────────────────── */
 .mc-clock {
@@ -325,7 +382,7 @@ button:focus-visible,
   font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-align: center;
+  text-align: left;
   color: var(--text);
   margin: 4px 0 14px;
   font-variant-numeric: tabular-nums;

@@ -34,7 +34,7 @@ socket.on('connect', () => {
   elConnStatus.classList.add('connected');
 });
 socket.on('disconnect', () => {
-  elConnStatus.textContent = 'Servern frånkopplad';
+  elConnStatus.textContent = 'Server frånkopplad';
   elConnStatus.classList.remove('connected');
   elConnStatus.classList.add('disconnected');
 });

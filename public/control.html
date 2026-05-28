@@ -22,13 +22,9 @@
         <div class="header-meta">
           <span id="connection-status" class="status disconnected"
                 role="status" aria-live="polite">Ansluter…</span>
-          <a href="graphics.html" target="_blank" rel="noopener" class="header-btn header-btn-graphics"
-             title="Öppna grafiken i ny flik (för OBS Browser Source)">
-            Öppna grafik<span class="visually-hidden"> (öppnas i ny flik)</span>
-          </a>
-          <a href="settings.html" target="_blank" rel="noopener" class="header-btn"
-             title="Hantera sponsorlogotyper och Stream Deck-genvägar">
-            Inställningar<span class="visually-hidden"> (öppnas i ny flik)</span>
+          <a href="settings.html" class="header-btn"
+             title="Hantera sponsorlogotyper, OBS-länk och Stream Deck-genvägar">
+            Inställningar
           </a>
         </div>
       </div>
@@ -148,6 +144,23 @@
 
         <article class="dash-card live-card">
           <h2>Resultat just nu</h2>
+          <div class="score-sync-row" role="group" aria-label="Källa för matchresultat">
+            <div class="score-sync-toggle" role="tablist" aria-label="Resultatkälla">
+              <button type="button" class="score-sync-btn is-active" data-mode="api"
+                      role="tab" aria-selected="true"
+                      title="Hämtar resultatet automatiskt från IBIS var 15:e sekund">
+                Hämta från IBIS
+              </button>
+              <button type="button" class="score-sync-btn" data-mode="manual"
+                      role="tab" aria-selected="false"
+                      title="Sköt resultatet själv med +1/−1-knapparna">
+                Hantera manuellt
+              </button>
+            </div>
+            <span class="score-sync-status" id="scoreSyncStatus" aria-live="polite">
+              Hämta en match från IBIS för att starta synken.
+            </span>
+          </div>
           <div class="score-board-xl">
             <div class="score-side">
               <div class="score-team" id="labelA">Hemma</div>
@@ -178,8 +191,8 @@
             <button id="btnReset" class="btn-clock-xl btn-reset">Återställ</button>
           </div>
           <div class="clock-adjust-row" role="group" aria-label="Justera matchtid manuellt">
-            <button id="btnClockPlus"  class="btn-clock-adjust" title="Lägg till 1 sekund">+1 s</button>
-            <button id="btnClockMinus" class="btn-clock-adjust" title="Dra bort 1 sekund">−1 s</button>
+            <button id="btnClockPlus"  class="btn-clock-adjust" title="Lägg till 1 sekund">+1 sek</button>
+            <button id="btnClockMinus" class="btn-clock-adjust" title="Dra bort 1 sekund">−1 sek</button>
             <input id="inputClockSet" class="input-clock-set" type="text" inputmode="numeric"
                    placeholder="MM:SS" maxlength="5"
                    aria-label="Justera matchklockan (MM:SS)"

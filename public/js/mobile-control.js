@@ -30,14 +30,24 @@ const periodDisplay  = document.getElementById('periodDisplay');
 const btnPeriodNext  = document.getElementById('btnPeriodNext');
 const btnPeriodReset = document.getElementById('btnPeriodReset');
 
+// Resultat-synk – read-only display (styrs från control.html)
+const scoreSyncModeEl = document.getElementById('scoreSyncMode');
+const scoreSyncStatus = document.getElementById('scoreSyncStatus');
+const scoreButtons    = document.querySelectorAll('.mc-btn-score');
+
+const SYNC_MODE_LABELS = {
+  api:    'Hämta från IBIS',
+  manual: 'Hantera manuellt'
+};
+
 // ── Anslutningsstatus ────────────────────────────────────────────────────
 socket.on('connect', () => {
-  statusEl.textContent = 'Ansluten';
+  statusEl.textContent = 'Server ansluten';
   statusEl.classList.remove('mc-status-off');
   statusEl.classList.add('mc-status-on');
 });
 socket.on('disconnect', () => {
-  statusEl.textContent = 'Frånkopplad';
+  statusEl.textContent = 'Server frånkopplad';
   statusEl.classList.remove('mc-status-on');
   statusEl.classList.add('mc-status-off');
 });
@@ -52,6 +62,7 @@ socket.on('stateUpdate', (state) => {
   updateClockButtons(state.clockRunning);
   const p = state.period || 1;
   periodDisplay.textContent = p <= 3 ? `Period ${p}` : p === 4 ? 'Övertid' : 'Straffar';
+  applyScoreSyncState(state);
 });
 
 socket.on('clockTick',   ({ clock })   => { displayClock.textContent = clock; });
@@ -129,3 +140,74 @@ inputClockSet.addEventListener('keydown', (e) => {
 // ── Period ───────────────────────────────────────────────────────────────
 btnPeriodNext .addEventListener('click', () => socket.emit('periodNext'));
 btnPeriodReset.addEventListener('click', () => socket.emit('periodReset'));
+
+// ── Resultat-synk (IBIS API vs Manuell) ─────────────────────────────────
+// Speglar samma UX som control.html: aktiv toggle, disabled score-knappar
+// i API-mode, och statustext som visar synk-status från servern.
+let latestScoreSyncStatus = null;
+let latestScoreSyncMode   = 'api';
+let latestSyncMatchId     = null;
+
+// Mobil-vyn är read-only: aktiv resultatkälla speglas hit från
+// kontrollpanelen via stateUpdate. Användaren kan inte byta mode härifrån
+// – det görs på control.html. Därför ingen click-handler.
+
+socket.on('scoreSyncStatus', (status) => {
+  latestScoreSyncStatus = status || null;
+  renderScoreSyncUI();
+});
+
+function applyScoreSyncState(state) {
+  latestScoreSyncMode   = state.scoreSyncMode === 'manual' ? 'manual' : 'api';
+  latestSyncMatchId     = state.syncMatchId || null;
+  latestScoreSyncStatus = state.scoreSyncStatus || latestScoreSyncStatus;
+  renderScoreSyncUI();
+}
+
+function renderScoreSyncUI() {
+  if (scoreSyncModeEl) {
+    scoreSyncModeEl.textContent = SYNC_MODE_LABELS[latestScoreSyncMode]
+      || SYNC_MODE_LABELS.api;
+    scoreSyncModeEl.dataset.mode = latestScoreSyncMode;
+  }
+
+  const disable = latestScoreSyncMode === 'api';
+  scoreButtons.forEach(btn => {
+    btn.disabled = disable;
+    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+  });
+  // I API-mode döljs knapparna helt – disabled-statet är då bara defensivt
+  // skydd om man tabb:ar till en knapp via tangentbord.
+  document.querySelector('.mc-score')?.classList.toggle('is-api-sync', disable);
+
+  if (!scoreSyncStatus) return;
+  scoreSyncStatus.classList.remove('is-ok', 'is-error');
+  if (latestScoreSyncMode === 'manual') {
+    scoreSyncStatus.textContent = 'Hanteras manuellt från kontrollpanelen.';
+    return;
+  }
+  if (!latestSyncMatchId) {
+    scoreSyncStatus.textContent = 'Väntar på match från kontrollpanelen.';
+    return;
+  }
+  if (latestScoreSyncStatus && latestScoreSyncStatus.ok) {
+    const ts = formatSyncClock(latestScoreSyncStatus.ts);
+    scoreSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    scoreSyncStatus.classList.add('is-ok');
+    return;
+  }
+  if (latestScoreSyncStatus && latestScoreSyncStatus.error) {
+    scoreSyncStatus.textContent = `Synk-fel: ${latestScoreSyncStatus.error}`;
+    scoreSyncStatus.classList.add('is-error');
+    return;
+  }
+  scoreSyncStatus.textContent = 'Hämtar från IBIS…';
+}
+
+function formatSyncClock(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}

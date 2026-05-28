@@ -66,7 +66,16 @@ let matchState = {
   // Aktiv time-out. null = ingen pågående. När en startas:
   //   { team: 'home'|'away', duration: 30, remaining: 30 }
   // Tickas i realtid (oberoende av matchklockan) av timeOutInterval.
-  timeOut: null
+  timeOut: null,
+  // Resultat-synk: 'api' (default) = poll IBIS var SCORE_SYNC_INTERVAL_MS,
+  // 'manual' = +1/−1-knapparna styr. syncMatchId sätts när en match-URL
+  // hämtas via fetch_innebandy_all_data och används av pollern.
+  scoreSyncMode: 'api',
+  syncMatchId: null,
+  // Senaste status-rapport från pollern – exponeras till UI så vi kan visa
+  // "Synkad 14:23:05" / "Fel: …". null = ingen synk-körning ännu.
+  //   { ok: boolean, ts: number, error?: string }
+  scoreSyncStatus: null
 };
 
 // Monotont stigande räknare för utvisnings-ID:n. Undviker kollisioner som
@@ -322,9 +331,13 @@ function resetMatchState() {
     penaltiesHome: [],
     penaltiesAway: [],
     preGameStats: null,
-    timeOut: null
+    timeOut: null,
+    scoreSyncMode: 'api',
+    syncMatchId: null,
+    scoreSyncStatus: null
   };
   penaltySeq = 0;
+  stopScoreSyncPoll();
   graphicState.activeGraphic = 'none';
   io.emit('stateUpdate', matchState);
   io.emit('switchGraphic', { to: 'none' });
@@ -376,6 +389,64 @@ function stopTimeOut() {
   if (timeOutInterval) { clearInterval(timeOutInterval); timeOutInterval = null; }
   matchState.timeOut = null;
   broadcastTimeOut();
+}
+
+// ── Resultat-synk från IBIS ─────────────────────────────────────────────────
+// När scoreSyncMode === 'api' och syncMatchId är satt pollar vi
+// matches/{matchId}-endpointen och uppdaterar scoreA/scoreB automatiskt.
+// Pollas frekvent nog för "live"-känsla, men inte så snabbt att IBIS
+// kan tycka det är obehagligt. Innebandy-mål är relativt sällsynta så
+// 15 s är en bra balans.
+const SCORE_SYNC_INTERVAL_MS = 15000;
+let scoreSyncInterval = null;
+let scoreSyncInFlight  = false;
+
+function stopScoreSyncPoll() {
+  if (scoreSyncInterval) { clearInterval(scoreSyncInterval); scoreSyncInterval = null; }
+}
+
+async function pollScoreOnce() {
+  if (scoreSyncInFlight) return;          // skydda mot överlappande requests
+  if (matchState.scoreSyncMode !== 'api') return;
+  const matchId = matchState.syncMatchId;
+  if (!matchId) return;
+  scoreSyncInFlight = true;
+  try {
+    const { apiRoot, headers } = await getInnebandyAuth();
+    const { data } = await axios.get(`${apiRoot}matches/${matchId}`,
+      { timeout: 10000, headers });
+    const home = (data && data.GoalsHomeTeam != null) ? parseInt(data.GoalsHomeTeam, 10) : null;
+    const away = (data && data.GoalsAwayTeam != null) ? parseInt(data.GoalsAwayTeam, 10) : null;
+    let changed = false;
+    if (Number.isFinite(home) && home !== matchState.scoreA) {
+      matchState.scoreA = home; changed = true;
+    }
+    if (Number.isFinite(away) && away !== matchState.scoreB) {
+      matchState.scoreB = away; changed = true;
+    }
+    matchState.scoreSyncStatus = { ok: true, ts: Date.now() };
+    if (changed) io.emit('stateUpdate', matchState);
+    else io.emit('scoreSyncStatus', matchState.scoreSyncStatus);
+  } catch (err) {
+    matchState.scoreSyncStatus = {
+      ok: false,
+      ts: Date.now(),
+      error: (err && err.message) || 'Okänt fel'
+    };
+    io.emit('scoreSyncStatus', matchState.scoreSyncStatus);
+    console.warn('[score-sync] fel:', err.message);
+  } finally {
+    scoreSyncInFlight = false;
+  }
+}
+
+function startScoreSyncPoll() {
+  stopScoreSyncPoll();
+  if (matchState.scoreSyncMode !== 'api') return;
+  if (!matchState.syncMatchId) return;
+  // Hämta direkt så vi inte väntar i 15 s innan första värdet
+  pollScoreOnce();
+  scoreSyncInterval = setInterval(pollScoreOnce, SCORE_SYNC_INTERVAL_MS);
 }
 
 // ── Texthjälp ────────────────────────────────────────────────────────────────
@@ -654,10 +725,10 @@ function buildPreGameStatsSide(pre, side, ppRow) {
 
 /**
  * Hämtar och bygger statistik inför match.
- * URL-format: ...sasong/X/serie/Y/match/Z/(statistik|laguppstallning|...)
+ * URL-format: ...sasong/X/(serie|turnering)/Y/match/Z/(statistik|laguppstallning|...)
  */
 async function fetchInnebandyPreGameStats(matchUrl) {
-  const m = matchUrl.match(/\/sasong\/(\d+)\/serie\/(\d+)\/match\/(\d+)/);
+  const m = matchUrl.match(/\/sasong\/(\d+)\/(?:serie|turnering)\/(\d+)\/match\/(\d+)/);
   if (!m) throw new Error('Kunde inte hitta säsong/serie/match-ID i URL:en');
   const [, , competitionId, matchId] = m;
 
@@ -700,7 +771,7 @@ async function fetchInnebandyPreGameStats(matchUrl) {
 // Hämtar alla matcher i serien, identifierar målrunda via källmatchens MatchID
 // och returnerar { roundName, fixtures }. Matchen från URL:en ingår också.
 async function fetchInnebandyFixtures(matchUrl) {
-  const m = matchUrl.match(/\/sasong\/(\d+)\/serie\/(\d+)\/match\/(\d+)/);
+  const m = matchUrl.match(/\/sasong\/(\d+)\/(?:serie|turnering)\/(\d+)\/match\/(\d+)/);
   if (!m) throw new Error('Kunde inte hitta match-ID i URL:en');
   const [, , competitionId, matchId] = m;
   const matchIdNum = parseInt(matchId, 10);
@@ -744,11 +815,13 @@ async function fetchInnebandyFixtures(matchUrl) {
 // ── Kombinerad hämtning: match + serietabell från en enda match-URL ─────────
 // Härleder säsong + serie ur match-URL:en och hämtar bägge endpoints parallellt
 // med Promise.allSettled. Om tabellen inte finns (t.ex. träningsmatch utan
-// serietabell) returneras matchdatan ändå – med standingsError satt.
+// serietabell, eller cup/turnering) returneras matchdatan ändå – med
+// standingsError satt. Accepterar både /serie/ (seriespel) och /turnering/
+// (cup/playoff) i URL:en eftersom IBIS använder båda formaten.
 async function fetchInnebandyAll(matchUrl) {
-  const m = matchUrl.match(/\/sasong\/(\d+)\/serie\/(\d+)\/match\/(\d+)/);
+  const m = matchUrl.match(/\/sasong\/(\d+)\/(?:serie|turnering)\/(\d+)\/match\/(\d+)/);
   if (!m) {
-    throw new Error('URL:en måste innehålla /sasong/X/serie/Y/match/Z – kontrollera länken');
+    throw new Error('URL:en måste innehålla /sasong/X/(serie|turnering)/Y/match/Z – kontrollera länken');
   }
   const [, season, competition, matchId] = m;
 
@@ -822,7 +895,7 @@ async function fetchInnebandyAll(matchUrl) {
 }
 
 async function fetchInnebandyStandings(url) {
-  const match = url.match(/\/serie\/(\d+)/);
+  const match = url.match(/\/(?:serie|turnering)\/(\d+)/);
   if (!match) throw new Error('Kunde inte hitta serie-ID i URL:en');
   const competitionId = match[1];
 
@@ -929,10 +1002,25 @@ io.on('connection', (socket) => {
   });
 
   safeOn(socket, 'updateScore', ({ team, delta } = {}) => {
+    // Blockera manuella ändringar när IBIS-synk styr resultatet, annars
+    // skulle en knapptryckning skrivas över vid nästa poll → flicker.
+    if (matchState.scoreSyncMode === 'api') return;
     const d = parseInt(delta, 10);
     if (!Number.isFinite(d)) return;
     if (team === 'A') matchState.scoreA = Math.max(0, matchState.scoreA + d);
     if (team === 'B') matchState.scoreB = Math.max(0, matchState.scoreB + d);
+    io.emit('stateUpdate', matchState);
+  });
+
+  // Växla mellan IBIS-synk och manuell hantering av resultatet. Default = 'api'.
+  // I 'api'-mode startar pollern om en match-URL hämtats; annars väntar den
+  // tills fetch_innebandy_all_data sätter syncMatchId.
+  safeOn(socket, 'setScoreSyncMode', ({ mode } = {}) => {
+    const next = mode === 'manual' ? 'manual' : 'api';
+    if (matchState.scoreSyncMode === next) return;
+    matchState.scoreSyncMode = next;
+    if (next === 'api') startScoreSyncPoll();
+    else                stopScoreSyncPoll();
     io.emit('stateUpdate', matchState);
   });
 
@@ -1079,6 +1167,15 @@ io.on('connection', (socket) => {
       // lineups/standings/fixtures – så ny OBS-anslutning eller producent
       // som öppnar kontrollpanelen efteråt får färska siffror utan refetch.
       matchState.preGameStats = data.preGameStats || null;
+
+      // Spara match-ID:t så score-sync-pollern vet vilken match som ska
+      // följas. Starta pollern direkt om vi står i API-mode.
+      const idMatch = url.match(/\/match\/(\d+)/);
+      if (idMatch) {
+        matchState.syncMatchId = parseInt(idMatch[1], 10);
+        if (matchState.scoreSyncMode === 'api') startScoreSyncPoll();
+      }
+
       io.emit('stateUpdate', matchState);
 
       socket.emit('fetch_result_innebandy_all_data', data);
@@ -1152,10 +1249,36 @@ function applyScore(team, delta) {
   return { scoreA: matchState.scoreA, scoreB: matchState.scoreB };
 }
 
-app.get('/api/score/home/add', (_req, res) => res.json({ success: true, ...applyScore('A',  1) }));
-app.get('/api/score/home/sub', (_req, res) => res.json({ success: true, ...applyScore('A', -1) }));
-app.get('/api/score/away/add', (_req, res) => res.json({ success: true, ...applyScore('B',  1) }));
-app.get('/api/score/away/sub', (_req, res) => res.json({ success: true, ...applyScore('B', -1) }));
+// Stream Deck-rutterna blockeras också i API-mode så Stream Deck inte kan
+// "kämpa mot" IBIS-pollern. Producenten måste aktivt växla till manuell-mode
+// för att triggers ska kunna ändra poängen.
+function rejectIfApiMode(res) {
+  if (matchState.scoreSyncMode === 'api') {
+    res.status(409).json({
+      success: false,
+      error: 'Resultatet styrs av IBIS-synk. Växla till manuell-mode i kontrollpanelen för att uppdatera poängen.'
+    });
+    return true;
+  }
+  return false;
+}
+
+app.get('/api/score/home/add', (_req, res) => {
+  if (rejectIfApiMode(res)) return;
+  res.json({ success: true, ...applyScore('A',  1) });
+});
+app.get('/api/score/home/sub', (_req, res) => {
+  if (rejectIfApiMode(res)) return;
+  res.json({ success: true, ...applyScore('A', -1) });
+});
+app.get('/api/score/away/add', (_req, res) => {
+  if (rejectIfApiMode(res)) return;
+  res.json({ success: true, ...applyScore('B',  1) });
+});
+app.get('/api/score/away/sub', (_req, res) => {
+  if (rejectIfApiMode(res)) return;
+  res.json({ success: true, ...applyScore('B', -1) });
+});
 
 // ── Utvisningar (penalties) ──────────────────────────────────────────────────
 // Endast 2 och 5 minuter stöds (standard i innebandy). Andra värden avvisas

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#7DC0F0">
+  <title>FBC Sollentuna Graphic Broadcast – Start</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <style>
+    :root {
+      --sky:           #7DC0F0;
+      --sky-hi:        #9FD3F8;
+      --sky-soft:      #BFE2FB;
+      --dark-blue:     #00263E;
+      --dark-blue-hi:  #003E66;
+      --ink:           #00263E;
+      --ink-soft:      rgba(0, 38, 62, 0.78);
+      --ink-muted:     rgba(0, 38, 62, 0.55);
+      --accent:        #00263E;
+      --on-dark:       #FFFFFF;
+      --radius-card:   16px;
+      --ease:          cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-snap:     cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      color: var(--ink);
+      font-family: 'Readex Pro', 'Segoe UI', 'Arial', sans-serif;
+    }
+
+    /* Bakgrund: ljus pappers-/himmels-textur. Fallback-gradient om bilden
+       saknas så sidan ändå funkar i en frisk version av FBC-blått. */
+    body {
+      position: relative;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: clamp(28px, 6vw, 64px) 20px 48px;
+      gap: clamp(28px, 5vw, 48px);
+      background-color: var(--sky);
+      background-image:
+        url('bg/landing.jpg'),
+        radial-gradient(ellipse at 20% 10%, rgba(255, 255, 255, 0.55), transparent 55%),
+        linear-gradient(160deg, var(--sky-hi) 0%, var(--sky) 55%, #6FB4E8 100%);
+      background-size: cover, auto, auto;
+      background-position: center, center, center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+
+    /* Lätt vit "dimma" över bakgrunden för läsbarhet utan att döda texturen */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at top, rgba(255, 255, 255, 0.18), transparent 60%),
+        radial-gradient(ellipse at bottom, rgba(0, 62, 102, 0.10), transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .home-wrap {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 880px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(28px, 5vw, 44px);
+      flex: 1;
+    }
+
+    /* Brand-badge: vit halvgenomskinlig pill mot ljus bakgrund */
+    .home-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 16px 7px 12px;
+      border: 1px solid rgba(0, 38, 62, 0.18);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dark-blue);
+      animation: fadeDown 0.6s var(--ease) both;
+      box-shadow: 0 4px 18px -8px rgba(0, 38, 62, 0.25);
+    }
+    .home-brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--dark-blue);
+      box-shadow: 0 0 0 4px rgba(0, 38, 62, 0.15);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* Hero */
+    .home-hero {
+      text-align: center;
+      max-width: 720px;
+      animation: fadeUp 0.7s var(--ease) 0.1s both;
+    }
+    .home-hero h1 {
+      font-size: clamp(2rem, 5.2vw, 3.1rem);
+      line-height: 1.08;
+      letter-spacing: -0.01em;
+      font-weight: 700;
+      color: var(--dark-blue);
+      text-shadow: 0 2px 14px rgba(255, 255, 255, 0.4);
+    }
+
+    /* Kortgrid */
+    .home-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      width: 100%;
+      animation: fadeUp 0.7s var(--ease) 0.22s both;
+    }
+    @media (min-width: 720px) {
+      .home-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+    }
+
+    /* Korten: mörkblå mot ljus bakgrund – starkast möjliga kontrast.
+       Det primära kortet är fyllt med FBC-blått, det sekundära är vitt
+       halv-genomskinligt så hierarkin blir tydlig. */
+    .home-card {
+      position: relative;
+      border-radius: var(--radius-card);
+      padding: 28px 26px 24px;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 220px;
+      overflow: hidden;
+      isolation: isolate;
+      transition:
+        transform 0.2s var(--ease-snap),
+        box-shadow 0.2s var(--ease),
+        border-color 0.2s var(--ease);
+    }
+
+    .home-card--primary {
+      background: linear-gradient(155deg, var(--dark-blue-hi) 0%, var(--dark-blue) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: var(--on-dark);
+      box-shadow:
+        0 12px 32px -10px rgba(0, 38, 62, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+    .home-card--primary::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -40%;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(125, 192, 240, 0.32), transparent 70%);
+      opacity: 0.6;
+      transition: opacity 0.3s var(--ease);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .home-card--primary:hover,
+    .home-card--primary:focus-visible {
+      transform: translateY(-3px);
+      box-shadow:
+        0 18px 40px -10px rgba(0, 38, 62, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      outline: none;
+    }
+    .home-card--primary:hover::before,
+    .home-card--primary:focus-visible::before {
+      opacity: 1;
+    }
+
+    .home-card--secondary {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(0, 38, 62, 0.15);
+      color: var(--ink);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 8px 24px -10px rgba(0, 38, 62, 0.25);
+    }
+    .home-card--secondary:hover,
+    .home-card--secondary:focus-visible {
+      transform: translateY(-3px);
+      border-color: var(--dark-blue);
+      box-shadow: 0 14px 32px -8px rgba(0, 38, 62, 0.32);
+      background: rgba(255, 255, 255, 0.9);
+      outline: none;
+    }
+
+    .home-card-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .home-card--primary .home-card-eyebrow   { color: var(--sky-soft); }
+    .home-card--secondary .home-card-eyebrow { color: var(--dark-blue); }
+
+    .home-card-eyebrow::before {
+      content: '';
+      width: 18px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    .home-card-title {
+      font-size: clamp(1.3rem, 2.4vw, 1.6rem);
+      font-weight: 700;
+      letter-spacing: 0.005em;
+      line-height: 1.15;
+      margin-top: 2px;
+    }
+
+    .home-card-desc {
+      font-size: 0.92rem;
+      line-height: 1.55;
+      font-weight: 300;
+    }
+    .home-card--primary .home-card-desc   { color: rgba(255, 255, 255, 0.82); }
+    .home-card--secondary .home-card-desc { color: var(--ink-soft); }
+
+    .home-card-cta {
+      margin-top: auto;
+      padding-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .home-card--primary .home-card-cta   { color: var(--sky-hi); }
+    .home-card--secondary .home-card-cta { color: var(--dark-blue); }
+
+    .home-card-cta-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 0.95rem;
+      transition: transform 0.2s var(--ease-snap), background 0.2s var(--ease);
+    }
+    .home-card--primary .home-card-cta-arrow {
+      background: rgba(125, 192, 240, 0.16);
+      border: 1px solid rgba(125, 192, 240, 0.4);
+    }
+    .home-card--secondary .home-card-cta-arrow {
+      background: rgba(0, 38, 62, 0.06);
+      border: 1px solid rgba(0, 38, 62, 0.25);
+    }
+    .home-card:hover .home-card-cta-arrow,
+    .home-card:focus-visible .home-card-cta-arrow {
+      transform: translateX(4px);
+    }
+    .home-card--primary:hover .home-card-cta-arrow,
+    .home-card--primary:focus-visible .home-card-cta-arrow {
+      background: rgba(125, 192, 240, 0.28);
+    }
+    .home-card--secondary:hover .home-card-cta-arrow,
+    .home-card--secondary:focus-visible .home-card-cta-arrow {
+      background: rgba(0, 38, 62, 0.12);
+    }
+
+    /* Animationer */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(0, 38, 62, 0.15); }
+      50%      { box-shadow: 0 0 0 8px rgba(0, 38, 62, 0.04); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="home-wrap">
+
+    <span class="home-brand">
+      <span class="home-brand-dot" aria-hidden="true"></span>
+      FBC Sollentuna · Graphic Broadcast
+    </span>
+
+    <section class="home-hero">
+      <h1>Vilket verktyg vill du använda?</h1>
+    </section>
+
+    <main class="home-grid">
+
+      <a class="home-card home-card--primary" href="mobile-control.html">
+        <span class="home-card-eyebrow">Liverapportering</span>
+        <div class="home-card-title">Matchrapportering</div>
+        <p class="home-card-desc">
+          Mobil-vy för matchresultat, matchklocka och period. För
+          rapportör eller assistent vid sidlinjen.
+        </p>
+        <span class="home-card-cta">
+          Öppna <span class="home-card-cta-arrow" aria-hidden="true">→</span>
+        </span>
+      </a>
+
+      <a class="home-card home-card--secondary" href="control.html">
+        <span class="home-card-eyebrow">Grafikverktyg</span>
+        <div class="home-card-title">Kontrollpanelen</div>
+        <p class="home-card-desc">
+          Styr grafiken live, hämta data från IBIS, hantera utvisningar,
+          kommentatorer och time-out.
+        </p>
+        <span class="home-card-cta">
+          Öppna <span class="home-card-cta-arrow" aria-hidden="true">→</span>
+        </span>
+      </a>
+
+    </main>
+
+  </div>
+
+</body>
+</html>
