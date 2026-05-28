@@ -1,0 +1,131 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   TOKENS.CSS – Delad design-token-källa för hela scoreboard-appen
+   ───────────────────────────────────────────────────────────────────────────
+   Single source of truth. Länkas FÖRST på alla sidor (före sidans egen CSS)
+   så att färger, avstånd, typsnitt, border-width och border-radius är
+   identiska överallt. Sidspecifika teman (t.ex. landningssidans ljusa palett)
+   ligger kvar lokalt i respektive fil och kan peka på dessa tokens.
+
+   Variabelnamnen är medvetet bakåtkompatibla med tidigare per-fil-:root-block
+   (--sollentuna-*, --lb-*-rgb, --bg, --accent …) så att alla befintliga
+   var()-referenser fortsätter att lösas utan ändring.
+═══════════════════════════════════════════════════════════════════════════ */
+:root {
+
+  /* ── FÄRGER ───────────────────────────────────────────────────────────── */
+
+  /* Sollentuna-palett */
+  --sollentuna-lb-900:    #5BB4FF;
+  --sollentuna-lb-700:    #8ECBFF;
+  --sollentuna-lb-500:    #A7D7FF;  /* Primär */
+  --sollentuna-lb-300:    #C1E3FF;
+  --sollentuna-lb-200:    #DAEEFF;
+  --sollentuna-dark-blue: #00263E;  /* Sekundär – kort-bakgrund */
+  --sollentuna-black:     #252525;  /* App-bakgrund */
+  --sollentuna-white:     #FFFFFF;
+
+  /* RGB-kanaler för rgba() */
+  --lb-500-rgb:    167, 215, 255;
+  --lb-900-rgb:    91, 180, 255;
+  --dark-blue-rgb: 0, 38, 62;
+  --white-rgb:     255, 255, 255;
+
+  /* Semantiska ytor */
+  --bg:            var(--sollentuna-black);
+  --surface:       var(--sollentuna-dark-blue);
+  --surface-deep:  rgba(0, 0, 0, 0.45);
+
+  /* Borders (färg + opacitet). Enhetlig 0.14/0.32 över alla sidor. */
+  --border:        rgba(var(--lb-500-rgb), 0.14);
+  --border-strong: rgba(var(--lb-500-rgb), 0.32);
+  --border-soft:   rgba(var(--lb-500-rgb), 0.10);
+  --border-accent: rgba(var(--lb-500-rgb), 0.28);
+
+  /* Text-hierarki – aliasen pekar medvetet på samma värde så att control-,
+     graphics- och mobil-sidornas olika namn (--text-muted/--text-soft/--muted)
+     alla löser till rätt ton. */
+  --text:          var(--sollentuna-white);
+  --text-strong:   var(--sollentuna-white);
+  --text-muted:    var(--sollentuna-lb-200);
+  --text-soft:     var(--sollentuna-lb-200);
+  --muted:         var(--sollentuna-lb-200);
+  --text-faint:    rgba(193, 227, 255, 0.45);
+
+  /* Accent */
+  --accent:        var(--sollentuna-lb-500);
+  --accent-hi:     var(--sollentuna-lb-900);
+  --accent-soft:   var(--sollentuna-lb-700);
+
+  /* Status */
+  --ok:      var(--sollentuna-lb-900);
+  --err:     #ff6b6b;   /* Röd för text på mörk yta (5+:1 mot dark-blue) */
+  --err-bg:  #dc2626;   /* Mörkare röd för solida bakgrunder med vit text */
+  --green:   #22c55e;
+  --green-dk:#16a34a;
+  --red:     #ef4444;
+  --red-dk:  #dc2626;
+
+  /* Penalty (utvisningsrutor i grafiken) */
+  --penalty-red:      #ff4d4d;
+  --penalty-red-soft: #ff8d8d;
+  --penalty-red-rgb:  255, 77, 77;
+
+  /* ── GLASMORF-MATERIAL (broadcast-grafik + replay) ────────────────────── */
+  --glass-bg:      rgba(10, 16, 26, 0.78);
+  --glass-bg-deep: rgba(6, 12, 20, 0.86);
+  --glass-blur:    blur(14px) saturate(140%);
+  --glass-border:  var(--bw-1) solid rgba(255, 255, 255, 0.08);
+  --glass-shadow:  0 24px 60px rgba(0, 0, 0, 0.55),
+                   0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+                   0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  --accent-glow:   0 0 18px rgba(var(--lb-900-rgb), 0.55),
+                   0 0 36px rgba(var(--lb-900-rgb), 0.22);
+
+  /* ── TYPSNITT ─────────────────────────────────────────────────────────── */
+  /* Readex Pro = föreningens typsnitt (självhostat, se fonts.css). */
+  --font-base:     'Readex Pro', 'Segoe UI', 'Arial', sans-serif;
+  --font-display:  'Readex Pro', 'Segoe UI', sans-serif;  /* siffror, klocka, eyebrows */
+  --font-name:     'Readex Pro', 'Segoe UI', sans-serif;  /* lagnamn, titlar */
+
+  /* ── AVSTÅND (spacing-skala) ──────────────────────────────────────────────
+     Tät skala som speglar de faktiska värdena i designen. Exakt samma px som
+     tidigare – inget ändras visuellt, men ger ett gemensamt rytm-språk. */
+  --space-2xs: 4px;
+  --space-xs:  6px;
+  --space-sm:  8px;
+  --space-md:  10px;
+  --space-lg:  12px;
+  --space-xl:  14px;
+  --space-2xl: 16px;
+  --space-3xl: 20px;
+  --space-4xl: 24px;
+  --space-5xl: 32px;
+  --space-6xl: 40px;
+  --gap:       14px;   /* mobil-vyns standard-gap (alias) */
+
+  /* ── BORDER-WIDTH ─────────────────────────────────────────────────────── */
+  --bw-1: 1px;   /* hårlinje – standard */
+  --bw-2: 2px;
+  --bw-3: 3px;   /* accent-kant (t.ex. ticker, penalty) */
+  --bw-4: 4px;
+  --bw-5: 5px;
+
+  /* ── BORDER-RADIUS ────────────────────────────────────────────────────────
+     Skala + bakåtkompatibla alias (--radius-card/-btn/--radius) på sina exakta
+     tidigare värden så inget hoppar. */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   18px;
+  --radius-pill: 999px;
+  --radius-card: 8px;    /* dashboard-/grafik-kort */
+  --radius-btn:  7px;    /* knappar */
+  --radius:      10px;   /* mobil-vyns standard-radius (alias) */
+
+  /* ── EASINGS / MOTION ─────────────────────────────────────────────────── */
+  --ease-out:  cubic-bezier(0.22, 1, 0.36, 1);            /* deceleration */
+  --ease-snap: cubic-bezier(0.175, 0.885, 0.32, 1.275);  /* sportig overshoot */
+  --ease-in:   cubic-bezier(0.55, 0, 0.55, 0.2);          /* exit */
+  --ease:      cubic-bezier(0.22, 1, 0.36, 1);            /* alias = --ease-out */
+}
