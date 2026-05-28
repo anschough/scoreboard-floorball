@@ -62,6 +62,8 @@ const elIntermissionAwayName = document.getElementById('intermissionAwayName');
 const elIntermissionHomeLogo = document.getElementById('intermissionHomeLogo');
 const elIntermissionAwayLogo = document.getElementById('intermissionAwayLogo');
 const elIntermissionWaiting  = document.getElementById('intermissionWaiting');
+const elIntermissionScoreHome = document.getElementById('intermissionScoreHome');
+const elIntermissionScoreAway = document.getElementById('intermissionScoreAway');
 
 // Time-out (pill dockad under scoreboarden)
 const elTimeOut       = document.getElementById('timeout-graphic');
@@ -927,6 +929,10 @@ socket.on('stateUpdate', (state) => {
   elIntermissionAwayName.textContent = state.teamB || 'BORTA';
   renderLogo(elIntermissionHomeLogo, state.homeLogo, state.teamA);
   renderLogo(elIntermissionAwayLogo, state.awayLogo, state.teamB);
+
+  // Aktuell ställning i mitten (ersätter VS under pågående match)
+  if (elIntermissionScoreHome) elIntermissionScoreHome.textContent = state.scoreA ?? 0;
+  if (elIntermissionScoreAway) elIntermissionScoreAway.textContent = state.scoreB ?? 0;
 
   // Auto-shrink långa lagnamn så de ryms i grid-cellen utan radbrytning.
   // Kör synkront (mätningen av scrollWidth triggar reflow så vi får färska

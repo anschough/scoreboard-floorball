@@ -2018,20 +2018,24 @@ html, body {
 
 /* Layout: identisk struktur som matchup-row – flex-centrerar hela
    gruppen så logotyperna alltid ligger symmetriskt mot panelens kanter. */
+/* 3-kolumnsgrid: [hemmalag] [resultat] [bortalag]. Sidokolumnerna är 1fr
+   så resultatet alltid hamnar exakt i panelens mitt – oavsett hur olika
+   långa lagnamnen är. Lagen sprider ut sig: logo mot ytterkanten, namn
+   in mot resultatet. */
 .intermission-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-6xl);
+  column-gap: var(--space-5xl);
   margin-bottom: 28px;
 }
 
 .intermission-team {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-5xl);
   min-width: 0;
-  max-width: calc(50% - 50px);
 }
 
 .intermission-logo-wrap {
@@ -2069,14 +2073,35 @@ html, body {
                0 2px 4px  rgba(0, 0, 0, 0.7);
 }
 
-/* VS-divider – identisk med matchup-skylten */
-.intermission-vs {
+/* Resultat-block – ersätter VS-dividern under pågående match. Visar
+   aktuell ställning stort och centrerat mellan lagen. */
+.intermission-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.intermission-score-num {
   font-family: var(--font-display);
-  font-size: 1.8rem;
+  font-size: 4.2rem;
+  font-weight: 700;
+  color: var(--sollentuna-white);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.85),
+               0 2px 4px  rgba(0, 0, 0, 0.7);
+}
+
+.intermission-score-sep {
+  font-family: var(--font-display);
+  font-size: 3rem;
   font-weight: 700;
   color: var(--sollentuna-lb-500);
-  letter-spacing: 0.24em;
-  padding: 0 12px;
+  line-height: 1;
   text-shadow: 0 0 18px rgba(var(--lb-900-rgb), 0.55),
                0 4px 10px rgba(0, 0, 0, 0.8);
 }
@@ -2107,7 +2132,7 @@ html, body {
 .intermission-meta,
 .intermission-team-home,
 .intermission-team-away,
-.intermission-vs {
+.intermission-score {
   opacity: 0;
   transition: opacity 0.4s var(--ease-out),
               transform 0.55s var(--ease-snap);
@@ -2116,7 +2141,7 @@ html, body {
 
 .intermission-team-home { transform: translateX(-60px); }
 .intermission-team-away { transform: translateX( 60px); }
-.intermission-vs        { transform: scale(0.6); }
+.intermission-score        { transform: scale(0.6); }
 .intermission-eyebrow,
 .intermission-meta      { transform: translateY(12px); }
 
@@ -2124,7 +2149,7 @@ html, body {
 .intermission-panel.visible .intermission-meta,
 .intermission-panel.visible .intermission-team-home,
 .intermission-panel.visible .intermission-team-away,
-.intermission-panel.visible .intermission-vs {
+.intermission-panel.visible .intermission-score {
   opacity: 1;
   transform: translateX(0) translateY(0) scale(1);
 }
@@ -2132,7 +2157,7 @@ html, body {
 .intermission-panel.visible .intermission-eyebrow   { transition-delay: 0.55s; }
 .intermission-panel.visible .intermission-team-home { transition-delay: 0.15s; }
 .intermission-panel.visible .intermission-team-away { transition-delay: 0.15s; }
-.intermission-panel.visible .intermission-vs        { transition-delay: 0.40s; }
+.intermission-panel.visible .intermission-score        { transition-delay: 0.40s; }
 .intermission-panel.visible .intermission-meta      { transition-delay: 0.65s; }
 
 
