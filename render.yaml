@@ -14,3 +14,14 @@ services:
         value: "20"
       - key: NODE_ENV
         value: production
+      # Delat lösenord för kontroll-/inställningssidorna. MÅSTE sättas i Render
+      # för att skydda sidorna – lämnas det tomt körs appen olåst.
+      - key: APP_PASSWORD
+        sync: false
+      # Signeringshemlighet för session-cookies. Genereras automatiskt en gång.
+      - key: SESSION_SECRET
+        generateValue: true
+      # Valfri API-nyckel för Stream Deck/automation som anropar /api/* utan
+      # cookie (skickas som ?key=… eller header X-API-Key). Lämna tom om ej använd.
+      - key: API_KEY
+        sync: false
