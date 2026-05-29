@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#7DC0F0">
+  <title>Logga in – FBC Sollentuna Livesändning</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/favicon.png">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/fonts.css">
+  <style>
+    :root {
+      --sky:          #7DC0F0;
+      --sky-hi:       #9FD3F8;
+      --dark-blue:    var(--sollentuna-dark-blue);
+      --dark-blue-hi: #003E66;
+      --ink:          var(--sollentuna-dark-blue);
+      --ink-soft:     rgba(var(--dark-blue-rgb), 0.78);
+      --ink-muted:    rgba(var(--dark-blue-rgb), 0.55);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      color: var(--ink);
+      font-family: 'Readex Pro', 'Segoe UI', 'Arial', sans-serif;
+    }
+
+    body {
+      position: relative;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background-color: var(--sky);
+      background-image:
+        url('bg/landing.jpg'),
+        radial-gradient(ellipse at 20% 10%, rgba(255, 255, 255, 0.55), transparent 55%),
+        linear-gradient(160deg, var(--sky-hi) 0%, var(--sky) 55%, #6FB4E8 100%);
+      background-size: cover, auto, auto;
+      background-position: center, center, center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at top, rgba(255, 255, 255, 0.18), transparent 60%),
+        radial-gradient(ellipse at bottom, rgba(0, 62, 102, 0.10), transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .login-card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      padding: 36px 32px 32px;
+      border-radius: 16px;
+      background: linear-gradient(155deg, var(--dark-blue-hi) 0%, var(--dark-blue) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: var(--sollentuna-white);
+      box-shadow:
+        0 18px 44px -12px rgba(0, 38, 62, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      animation: fadeUp 0.5s var(--ease) both;
+    }
+
+    .login-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--sky-hi);
+    }
+    .login-eyebrow::before {
+      content: '';
+      width: 18px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    .login-card h1 {
+      margin-top: 10px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .login-card p.sub {
+      margin-top: 8px;
+      font-size: 0.92rem;
+      font-weight: 300;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    form { margin-top: 24px; display: flex; flex-direction: column; gap: 14px; }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    input[type="password"] {
+      width: 100%;
+      padding: 13px 14px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--sollentuna-white);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: var(--radius-btn);
+      transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    input[type="password"]::placeholder { color: rgba(255, 255, 255, 0.45); }
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--sky-hi);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    button {
+      margin-top: 4px;
+      padding: 13px 16px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      font-family: inherit;
+      letter-spacing: 0.02em;
+      color: var(--dark-blue);
+      background: var(--sky-hi);
+      border: none;
+      border-radius: var(--radius-btn);
+      cursor: pointer;
+      transition: transform 0.15s var(--ease-snap), background 0.2s var(--ease);
+    }
+    button:hover:not(:disabled) { transform: translateY(-2px); background: #B7E0FC; }
+    button:disabled { opacity: 0.6; cursor: default; }
+
+    .error {
+      min-height: 1.2em;
+      font-size: 0.86rem;
+      color: #ffb4b4;
+      font-weight: 500;
+    }
+
+    .back {
+      display: inline-block;
+      margin-top: 20px;
+      font-size: 0.84rem;
+      color: var(--sky-hi);
+      text-decoration: none;
+    }
+    .back:hover { text-decoration: underline; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="login-card">
+    <span class="login-eyebrow">FBC Sollentuna Livesändning</span>
+    <h1>Logga in</h1>
+    <p class="sub">Ange lösenordet för att nå kontrollpanelen och inställningarna.</p>
+
+    <form id="login-form" autocomplete="off">
+      <label for="password">Lösenord</label>
+      <input type="password" id="password" name="password"
+             placeholder="Skriv lösenordet här…" autocomplete="current-password" required autofocus>
+      <p class="error" id="error" role="alert" aria-live="polite"></p>
+      <button type="submit" id="submit">Logga in</button>
+    </form>
+
+    <a class="back" href="/">← Tillbaka till startsidan</a>
+  </main>
+
+  <script>
+    const form    = document.getElementById('login-form');
+    const input   = document.getElementById('password');
+    const errorEl = document.getElementById('error');
+    const button  = document.getElementById('submit');
+
+    // Vart ska vi tillbaka efter inloggning? Default = kontrollpanelen.
+    // Tillåt bara interna sökvägar. Måste börja med "/" men inte "//" eller "/\"
+    // – båda tolkas av webbläsare som protokoll-relativa URL:er (open redirect).
+    function safeNext() {
+      const raw = new URLSearchParams(location.search).get('next');
+      if (raw && raw[0] === '/' && raw[1] !== '/' && raw[1] !== '\\') return raw;
+      return '/control.html';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      button.disabled = true;
+      button.textContent = 'Loggar in…';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: input.value })
+        });
+        if (res.ok) {
+          location.href = safeNext();
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errorEl.textContent = data.error || 'Inloggningen misslyckades.';
+      } catch {
+        errorEl.textContent = 'Kunde inte nå servern. Försök igen.';
+      }
+      button.disabled = false;
+      button.textContent = 'Logga in';
+      input.select();
+    });
+  </script>
+
+</body>
+</html>

@@ -10,6 +10,111 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
+// Bakom Render/proxy: lita på X-Forwarded-Proto så att secure-cookies sätts
+// korrekt (https) i produktion men inte stör http i lokal utveckling.
+app.set('trust proxy', 1);
+
+// ── Autentisering ─────────────────────────────────────────────────────────────
+// Ett delat lösenord (APP_PASSWORD) skyddar kontroll-/inställningssidorna samt
+// alla skriv-API:er och muterande socket-händelser. Visningssidorna (graphics,
+// replay, landningssidan) är medvetet öppna eftersom OBS Browser Source inte kan
+// logga in – de kan ändå inte ändra något (de tar bara emot state).
+//
+// Sätts inget APP_PASSWORD körs appen olåst (bekvämt lokalt) men loggar en tydlig
+// varning. På Render: sätt APP_PASSWORD i miljövariablerna.
+const APP_PASSWORD   = process.env.APP_PASSWORD || '';
+const AUTH_ENABLED   = APP_PASSWORD.length > 0;
+// Hemlighet för att signera session-cookies. Default härleds från lösenordet så
+// att sessioner överlever omstarter; sätt SESSION_SECRET för full kontroll.
+const SESSION_SECRET = process.env.SESSION_SECRET
+  || crypto.createHash('sha256').update(`${APP_PASSWORD}:scoreboard-session`).digest('hex');
+// Valfri API-nyckel för Stream Deck/automation som anropar /api/* utan cookie.
+// Skickas som ?key=… eller header X-API-Key.
+const API_KEY        = process.env.API_KEY || '';
+const SESSION_COOKIE = 'sb_session';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dagar
+
+function parseCookies(req) {
+  const out = {};
+  const raw = req.headers && req.headers.cookie;
+  if (!raw) return out;
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return out;
+}
+
+// Timing-säker jämförelse. Hashar båda sidor till fast längd (32 byte) först,
+// så att varken körtiden eller buffertlängden läcker något om hemligheten
+// (t.ex. lösenordets längd).
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+function signSession(expiresAt) {
+  const payload = String(expiresAt);
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+function verifySession(token) {
+  if (!token || typeof token !== 'string') return false;
+  const dot = token.lastIndexOf('.');
+  if (dot === -1) return false;
+  const payload = token.slice(0, dot);
+  const sig     = token.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  if (!safeEqual(sig, expected)) return false;
+  const expiresAt = parseInt(payload, 10);
+  return Number.isFinite(expiresAt) && Date.now() < expiresAt;
+}
+
+// Är denna HTTP-request inloggad? (Olåst läge → alltid true.)
+function isAuthed(req) {
+  if (!AUTH_ENABLED) return true;
+  return verifySession(parseCookies(req)[SESSION_COOKIE]);
+}
+
+// Giltig API-nyckel? Endast relevant när API_KEY är satt.
+function hasApiKey(req) {
+  if (!API_KEY) return false;
+  const key = (req.get && req.get('x-api-key')) || (req.query && req.query.key);
+  return !!key && safeEqual(key, API_KEY);
+}
+
+// ── Brute-force-skydd för inloggning ─────────────────────────────────────────
+// Enkel in-memory-räknare per IP. Räcker för en enkel-instans-app; nollställs
+// vid omstart. Förhindrar att någon gissar det delade lösenordet i snabb takt.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const LOGIN_MAX_FAILS = 10;             // max misslyckade försök per fönster
+const loginAttempts = new Map();        // ip -> { count, first }
+
+function loginRateLimited(ip) {
+  // Lat rensning så att Map:en inte växer obegränsat.
+  if (loginAttempts.size > 5000) {
+    const now = Date.now();
+    for (const [k, v] of loginAttempts) {
+      if (now - v.first > LOGIN_WINDOW_MS) loginAttempts.delete(k);
+    }
+  }
+  const rec = loginAttempts.get(ip);
+  if (!rec || Date.now() - rec.first > LOGIN_WINDOW_MS) return false;
+  return rec.count >= LOGIN_MAX_FAILS;
+}
+
+function recordLoginFailure(ip) {
+  const rec = loginAttempts.get(ip);
+  if (!rec || Date.now() - rec.first > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, first: Date.now() });
+  } else {
+    rec.count++;
+  }
+}
+
 // Healthcheck för Render m.fl. Svarar omedelbart utan att röra annan logik
 // så att portdetekteringen och deploy-health-check alltid lyckas snabbt.
 app.get('/healthz', (_req, res) => res.status(200).type('text/plain').send('ok'));
@@ -17,6 +122,82 @@ app.get('/healthz', (_req, res) => res.status(200).type('text/plain').send('ok')
 // JSON-parser för sponsor-uppladdningar (data-URL:er på upp till ~5 MB/st × 10).
 // Sätts före static så att API-rutterna nedan kan läsa req.body.
 app.use(express.json({ limit: '60mb' }));
+
+// ── Inloggning ─────────────────────────────────────────────────────────────
+// Registreras FÖRE static + guards så att login alltid är nåbar.
+app.post('/api/login', (req, res) => {
+  if (!AUTH_ENABLED) return res.json({ ok: true });
+  const ip = req.ip || 'okänd';
+  if (loginRateLimited(ip)) {
+    return res.status(429).json({ ok: false, error: 'För många försök. Vänta en stund och försök igen.' });
+  }
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || !safeEqual(password, APP_PASSWORD)) {
+    recordLoginFailure(ip);
+    return res.status(401).json({ ok: false, error: 'Fel lösenord' });
+  }
+  loginAttempts.delete(ip); // lyckad inloggning → nollställ räknaren
+  const token = signSession(Date.now() + SESSION_TTL_MS);
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_TTL_MS,
+    path: '/'
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  res.clearCookie(SESSION_COOKIE, { path: '/' });
+  res.json({ ok: true });
+});
+
+// Hjälp för login-sidan att veta om autentisering ens är på.
+app.get('/api/auth/status', (req, res) => {
+  res.json({ authEnabled: AUTH_ENABLED, authed: isAuthed(req) });
+});
+
+// ── Sidskydd ───────────────────────────────────────────────────────────────
+// Kontroll-/inställningssidor kräver inloggning. Måste ligga FÖRE static, annars
+// hade static serverat HTML:en direkt. Oinloggade skickas till login med ?next=.
+//
+// VIKTIGT: express.static avkodar och normaliserar sökvägen på egen hand, så en
+// exakt strängmatchning här kan kringgås med t.ex. /%63ontrol.html (URL-encoding),
+// /CONTROL.HTML (versaler på skiftlägesokänsligt filsystem) eller
+// /x/../control.html (path traversal). Vi avkodar, normaliserar och gör gemener
+// på samma sätt som static innan vi jämför, så att inget kryphål släpper förbi.
+const PROTECTED_PAGES = new Set(['/control.html', '/mobile-control.html', '/settings.html']);
+
+function normalizedPath(rawPath) {
+  let p = rawPath;
+  try { p = decodeURIComponent(p); } catch { /* ogiltig encoding → använd rådata */ }
+  return path.posix.normalize(p).toLowerCase();
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (!PROTECTED_PAGES.has(normalizedPath(req.path))) return next();
+  if (isAuthed(req)) return next();
+  return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
+});
+
+// ── API-skydd ──────────────────────────────────────────────────────────────
+// Allt under /api kräver inloggning eller giltig API-nyckel, förutom öppna
+// läs-endpoints (status/sponsorlista) och login/logout/auth-status ovan.
+app.use('/api', (req, res, next) => {
+  // Öppna läs-endpoints som de publika visningssidorna (graphics/replay) använder:
+  // - /state    : Stream Deck-feedback
+  // - /sponsors : sponsorlista
+  // - /series/:id/live : övriga-matcher-tickern i OBS-grafiken
+  if (req.method === 'GET' && (
+        req.path === '/state' ||
+        req.path === '/sponsors' ||
+        /^\/series\/\d+\/live$/.test(req.path)
+      )) return next();
+  if (isAuthed(req) || hasApiKey(req)) return next();
+  return res.status(401).json({ ok: false, error: 'Ej inloggad' });
+});
 
 // Statiska filer (control.html, graphics.html, css, js).
 // Dev-läge: ingen cache så att ändringar slår igenom direkt utan hard refresh.
@@ -1308,6 +1489,12 @@ async function fetchInnebandyLiveSeries(competitionId, { excludeMatchId = null }
 // Async handlers stöds också – då fångas både synkrona kast och promise-rejects.
 function safeOn(socket, event, handler) {
   socket.on(event, (...args) => {
+    // Alla safeOn-händelser muterar matchstate → kräver inloggad socket.
+    // Visningssidor (graphics/replay) tar bara emot emits och påverkas inte.
+    if (AUTH_ENABLED && !socket.data.authed) {
+      socket.emit('authError', { error: 'Ej inloggad' });
+      return;
+    }
     try {
       const ret = handler(...args);
       if (ret && typeof ret.catch === 'function') {
@@ -1318,6 +1505,20 @@ function safeOn(socket, event, handler) {
     }
   });
 }
+
+// Markera varje socket som inloggad eller ej redan vid handshake. Cookien följer
+// med automatiskt (samma origin); en API-nyckel kan skickas via auth-payloaden.
+io.use((socket, next) => {
+  const h = socket.handshake;
+  const fakeReq = {
+    headers: h.headers,
+    query:   h.query,
+    get: (name) => h.headers[String(name).toLowerCase()]
+  };
+  socket.data.authed = isAuthed(fakeReq)
+    || (!!API_KEY && !!h.auth && safeEqual(h.auth.key, API_KEY));
+  next();
+});
 
 io.on('connection', (socket) => {
   console.log(`Klient ansluten: ${socket.id}`);
@@ -2184,5 +2385,11 @@ server.on('error', (err) => {
 server.listen(PORT, HOST, () => {
   console.log(`\n✅ Scoreboard-server igång (lyssnar på ${HOST}:${PORT})`);
   console.log(`   Grafik (OBS Browser Source): http://localhost:${PORT}/graphics.html`);
-  console.log(`   Kontrollpanel:               http://localhost:${PORT}/control.html\n`);
+  console.log(`   Kontrollpanel:               http://localhost:${PORT}/control.html`);
+  if (AUTH_ENABLED) {
+    console.log(`   🔒 Inloggning aktiverad (APP_PASSWORD satt).\n`);
+  } else {
+    console.warn(`   ⚠️  OLÅST: APP_PASSWORD är inte satt – vem som helst kan ändra grafiken.`);
+    console.warn(`       Sätt APP_PASSWORD för att skydda kontroll-/inställningssidorna.\n`);
+  }
 });

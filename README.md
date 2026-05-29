@@ -62,9 +62,31 @@ När servern är igång öppnar du:
 
 Servern lyssnar på port **3000** som standard. Ändra med `PORT=4000 npm start` eller `HOST=127.0.0.1 npm start` för att bara lyssna lokalt.
 
+## Inloggning & behörighet
+
+Kontrollpanelen, mobil-kontrollpanelen och inställningarna är skyddade med ett **delat lösenord**. Visningssidorna (`graphics.html`, `replay.html`) och landningssidan är öppna eftersom OBS Browser Source inte kan logga in – de kan ändå bara *visa*, inte ändra.
+
+Sätt lösenordet via miljövariabeln `APP_PASSWORD`:
+
+```bash
+APP_PASSWORD="ditt-hemliga-lösenord" npm start
+```
+
+Första gången du öppnar en skyddad sida skickas du till `/login.html`. Efter inloggning sätts en signerad session-cookie som gäller i 30 dagar. Logga ut via "Logga ut"-knappen i sidhuvudet.
+
+| Miljövariabel | Krävs | Beskrivning |
+|---------------|-------|-------------|
+| `APP_PASSWORD` | Ja (i produktion) | Delat lösenord. **Lämnas det tomt körs appen olåst** (bekvämt lokalt, men osäkert publikt). |
+| `SESSION_SECRET` | Nej | Hemlighet som signerar cookies. Härleds från lösenordet om den inte sätts; sätt ett eget värde för full kontroll. |
+| `API_KEY` | Nej | Tillåter Stream Deck/automation att anropa `/api/*` utan cookie. Skickas som `?key=…` eller header `X-API-Key`. |
+
+> **Stream Deck:** lägg till `?key=DIN_API_KEY` på varje URL, t.ex. `http://din-server/api/score/home/add?key=DIN_API_KEY`.
+
 ## Driftsättning
 
 Projektet inkluderar `render.yaml` för enklicksdeploy till [Render](https://render.com). Tjänsten kör på `node server.js`, exponerar `/healthz` för health check och sätts upp med `autoDeploy: true` mot `main`-branchen (region: Frankfurt).
+
+**Viktigt:** sätt `APP_PASSWORD` i Render-tjänstens miljövariabler – annars är sidorna oskyddade. `SESSION_SECRET` genereras automatiskt och `API_KEY` är valfri.
 
 ## Teknik
 
