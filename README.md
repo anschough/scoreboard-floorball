@@ -66,7 +66,14 @@ Servern lyssnar på port **3000** som standard. Ändra med `PORT=4000 npm start`
 
 Kontrollpanelen, mobil-kontrollpanelen och inställningarna är skyddade med ett **delat lösenord**. Visningssidorna (`graphics.html`, `replay.html`) och landningssidan är öppna eftersom OBS Browser Source inte kan logga in – de kan ändå bara *visa*, inte ändra.
 
-Sätt lösenordet via miljövariabeln `APP_PASSWORD`:
+Sätt lösenordet via miljövariabeln `APP_PASSWORD`. Enklast lokalt är att kopiera `.env.example` till `.env` och fylla i värdena – `.env` laddas automatiskt vid start (och är gitignorerad):
+
+```bash
+cp .env.example .env   # fyll sedan i APP_PASSWORD
+npm start
+```
+
+Alternativt direkt på kommandoraden:
 
 ```bash
 APP_PASSWORD="ditt-hemliga-lösenord" npm start

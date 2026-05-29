@@ -1,3 +1,8 @@
+// Laddar .env (lösenord, API-nycklar) för lokal körning. På Render sätts
+// miljövariablerna i dashboarden i stället – då finns ingen .env och detta är
+// en tyst no-op.
+require('dotenv').config();
+
 const express = require('express');
 const http    = require('http');
 const { Server } = require('socket.io');
