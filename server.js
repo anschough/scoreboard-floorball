@@ -537,7 +537,12 @@ function countGroups(arr) {
 function promoteQueued(arr) {
   let changed = false;
   while (countActive(arr) < MAX_ACTIVE_PENALTIES) {
-    const next = arr.find(p => p.status === 'queued');
+    // En köad post i ett par (2+2) får inte starta förrän dess syskon
+    // (samma pairId) löpt ut – halvorna avtjänas i följd, aldrig parallellt.
+    const next = arr.find(p =>
+      p.status === 'queued' &&
+      !(p.pairId && arr.some(o => o.pairId === p.pairId && o.status === 'active'))
+    );
     if (!next) break;
     next.status    = 'active';
     next.remaining = next.duration;  // queued-tid räknas inte med
@@ -1563,6 +1568,13 @@ io.on('connection', (socket) => {
     if (!Number.isFinite(d)) return;
     if (team === 'A') matchState.scoreA = Math.max(0, matchState.scoreA + d);
     if (team === 'B') matchState.scoreB = Math.max(0, matchState.scoreB + d);
+    // Powerplay-mål: varje gjort mål (positivt delta) avslutar motståndarens
+    // pågående 2-min om laget är i numerärt underläge. En 2+2 promotar då
+    // automatiskt sin köade halva.
+    if (d > 0 && (team === 'A' || team === 'B')) {
+      const scoringTeam = team === 'A' ? 'home' : 'away';
+      for (let i = 0; i < d; i++) endMinorForGoal(scoringTeam);
+    }
     io.emit('stateUpdate', matchState);
   });
 
@@ -1877,6 +1889,11 @@ io.on('connection', (socket) => {
 function applyScore(team, delta) {
   if (team === 'A') matchState.scoreA = Math.max(0, matchState.scoreA + delta);
   if (team === 'B') matchState.scoreB = Math.max(0, matchState.scoreB + delta);
+  // Samma powerplay-regel som webb-kontrollpanelens updateScore: ett gjort mål
+  // avslutar motståndarens pågående 2-min vid numerärt underläge.
+  if (delta > 0 && (team === 'A' || team === 'B')) {
+    endMinorForGoal(team === 'A' ? 'home' : 'away');
+  }
   broadcastState();
   return { scoreA: matchState.scoreA, scoreB: matchState.scoreB };
 }
@@ -1987,6 +2004,35 @@ function removePenalty(team, id) {
   arr.splice(idx, 1);
   // Om vi tog bort en aktiv ska nästa queued promoteras direkt.
   promoteQueued(arr);
+  broadcastPenalties();
+  return true;
+}
+
+// Powerplay-mål: `scoringTeam` (home/away) gör mål. Om motståndaren spelar i
+// numerärt underläge (fler aktiva utvisningar) avslutas motståndarens pågående
+// MINDRE utvisning (2 min) med kortast återstående tid. 5-min (matchstraff)
+// påverkas inte enligt regelverket, och vid lika numerär (t.ex. 4-mot-4)
+// avslutar ett mål ingen utvisning. För en 2+2 tas den aktiva halvan bort –
+// den köade halvan promotas då automatiskt (spelaren sitter kvar för andra
+// 2-minutersperioden). Returnerar true om en utvisning avslutades.
+function endMinorForGoal(scoringTeam) {
+  const oppTeam = scoringTeam === 'home' ? 'away' : 'home';
+  const oppArr  = penaltyArrayFor(oppTeam);
+  const ownArr  = penaltyArrayFor(scoringTeam);
+  if (!oppArr || !ownArr) return false;
+  // Endast om motståndaren är i numerärt underläge gör målet att en
+  // utvisning avslutas (powerplay-regeln).
+  if (countActive(oppArr) <= countActive(ownArr)) return false;
+
+  const MINOR_DURATION = 2 * 60;
+  let target = null;
+  for (const p of oppArr) {
+    if (p.status !== 'active' || p.duration !== MINOR_DURATION) continue;
+    if (!target || p.remaining < target.remaining) target = p;
+  }
+  if (!target) return false;
+  oppArr.splice(oppArr.indexOf(target), 1);
+  promoteQueued(oppArr);
   broadcastPenalties();
   return true;
 }
