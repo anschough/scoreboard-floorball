@@ -88,6 +88,32 @@ button:focus-visible,
   color: var(--sollentuna-dark-blue, #002855);
   outline: none;
 }
+
+/* ── Logga ut – större secondary-knapp längst ner ──────────────────────── */
+.mc-logout {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 15px 16px;
+  text-align: center;
+  background: rgba(var(--lb-500-rgb), 0.12);
+  color: var(--accent);
+  border: var(--bw-1) solid var(--border-strong);
+  border-radius: var(--radius-btn);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out, ease-out);
+}
+.mc-logout:hover,
+.mc-logout:focus-visible {
+  background: var(--accent);
+  color: var(--sollentuna-dark-blue, #002855);
+  outline: none;
+}
 .mc-title {
   grid-column: 2;
   font-size: 1rem;

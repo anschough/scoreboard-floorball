@@ -45,7 +45,7 @@ const SYNC_MODE_LABELS = {
 
 // ── Anslutningsstatus ────────────────────────────────────────────────────
 socket.on('connect', () => {
-  statusEl.textContent = 'Server ansluten';
+  statusEl.textContent = 'Ansluten';
   statusEl.classList.remove('mc-status-off');
   statusEl.classList.add('mc-status-on');
 });

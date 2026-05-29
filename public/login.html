@@ -9,6 +9,7 @@
   <link rel="apple-touch-icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/icons.css">
   <style>
     :root {
       --sky:          #7DC0F0;
@@ -155,14 +156,18 @@
       color: #ffb4b4;
       font-weight: 500;
     }
+    .error:empty { display: none; }
 
     .back {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       margin-top: 20px;
       font-size: 0.84rem;
       color: var(--sky-hi);
       text-decoration: none;
     }
+    .back .material-symbols-outlined { font-size: 1.15em; }
     .back:hover { text-decoration: underline; }
 
     @keyframes fadeUp {
@@ -189,7 +194,7 @@
       <button type="submit" id="submit">Logga in</button>
     </form>
 
-    <a class="back" href="/">← Tillbaka till startsidan</a>
+    <a class="back" href="/"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Tillbaka till startsidan</a>
   </main>
 
   <script>

@@ -318,6 +318,13 @@
   margin-left: auto;
 }
 
+/* ── Headerns högergrupp: anslutningsstatus + Logga ut ──────────────────── */
+.docs-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* ── Grafiklänk för OBS – kopiera-rad ───────────────────────────────────── */
 .obs-url-group {
   display: flex;
