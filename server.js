@@ -29,15 +29,25 @@ app.set('trust proxy', 1);
 // varning. På Render: sätt APP_PASSWORD i miljövariablerna.
 const APP_PASSWORD   = process.env.APP_PASSWORD || '';
 const AUTH_ENABLED   = APP_PASSWORD.length > 0;
-// Hemlighet för att signera session-cookies. Default härleds från lösenordet så
-// att sessioner överlever omstarter; sätt SESSION_SECRET för full kontroll.
-const SESSION_SECRET = process.env.SESSION_SECRET
-  || crypto.createHash('sha256').update(`${APP_PASSWORD}:scoreboard-session`).digest('hex');
+// Hemlighet för att signera session-cookies. MÅSTE vara ett långt, slumpat värde
+// som är HELT frikopplat från lösenordet. (Tidigare härleddes den ur APP_PASSWORD,
+// men då blir HMAC-nyckelns entropi = lösenordets: en läckt cookie gör att lösenordet
+// kan knäckas offline, förbi rate limiting.) Generera med:
+//   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+if (AUTH_ENABLED && SESSION_SECRET.length < 32) {
+  console.error('❌ SESSION_SECRET måste sättas till ett långt slumpat värde (minst 32 tecken) när APP_PASSWORD är satt.');
+  console.error('   Generera ett: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  process.exit(1);
+}
 // Valfri API-nyckel för Stream Deck/automation som anropar /api/* utan cookie.
-// Skickas som ?key=… eller header X-API-Key.
+// Skickas som header X-API-Key (rekommenderas) eller ?key=… (loggas – se varning).
 const API_KEY        = process.env.API_KEY || '';
 const SESSION_COOKIE = 'sb_session';
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dagar
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dagar
+// Bumpa epoken (eller byt SESSION_SECRET) för att omedelbart ogiltigförklara ALLA
+// utfärdade sessioner – t.ex. om en cookie läckt eller någon glömt logga ut.
+const SESSION_EPOCH  = parseInt(process.env.SESSION_EPOCH || '1', 10) || 1;
 
 function parseCookies(req) {
   const out = {};
@@ -60,8 +70,10 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
+// Payload = "<utgångstid>.<epok>". Epoken signeras med så att en bumpad
+// SESSION_EPOCH gör alla äldre tokens ogiltiga (se konstanten ovan).
 function signSession(expiresAt) {
-  const payload = String(expiresAt);
+  const payload = `${expiresAt}.${SESSION_EPOCH}`;
   const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
@@ -74,7 +86,10 @@ function verifySession(token) {
   const sig     = token.slice(dot + 1);
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
   if (!safeEqual(sig, expected)) return false;
-  const expiresAt = parseInt(payload, 10);
+  const [expiresStr, epochStr] = payload.split('.');
+  const expiresAt = parseInt(expiresStr, 10);
+  const epoch     = parseInt(epochStr, 10);
+  if (epoch !== SESSION_EPOCH) return false; // återkallad genom bumpad epok
   return Number.isFinite(expiresAt) && Date.now() < expiresAt;
 }
 
@@ -85,9 +100,18 @@ function isAuthed(req) {
 }
 
 // Giltig API-nyckel? Endast relevant när API_KEY är satt.
+let warnedQueryKey = false;
 function hasApiKey(req) {
   if (!API_KEY) return false;
-  const key = (req.get && req.get('x-api-key')) || (req.query && req.query.key);
+  const headerKey = req.get && req.get('x-api-key');
+  const queryKey  = req.query && req.query.key;
+  // Nyckel i URL:en läcker till access-/proxy-loggar och webbhistorik. Stöds för
+  // bakåtkompatibilitet (äldre Stream Deck-knappar) men avråds – använd headern.
+  if (!headerKey && queryKey && !warnedQueryKey) {
+    warnedQueryKey = true;
+    console.warn('[auth] API-nyckel skickas via ?key= i URL:en – använd headern X-API-Key istället (URL:er hamnar i loggar).');
+  }
+  const key = headerKey || queryKey;
   return !!key && safeEqual(key, API_KEY);
 }
 
@@ -95,8 +119,21 @@ function hasApiKey(req) {
 // Enkel in-memory-räknare per IP. Räcker för en enkel-instans-app; nollställs
 // vid omstart. Förhindrar att någon gissar det delade lösenordet i snabb takt.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const LOGIN_MAX_FAILS = 10;             // max misslyckade försök per fönster
+const LOGIN_MAX_FAILS = 10;             // max misslyckade försök per IP per fönster
+const LOGIN_MAX_GLOBAL = 100;           // max misslyckade försök TOTALT per fönster
 const loginAttempts = new Map();        // ip -> { count, first }
+
+// Globalt tak ovanpå per-IP-skyddet: stoppar distribuerad brute-force där
+// angriparen roterar IP:n för att kringgå per-IP-gränsen.
+let globalFails = 0;
+let globalWindowStart = Date.now();
+function globalRateLimited() {
+  if (Date.now() - globalWindowStart > LOGIN_WINDOW_MS) {
+    globalFails = 0;
+    globalWindowStart = Date.now();
+  }
+  return globalFails >= LOGIN_MAX_GLOBAL;
+}
 
 function loginRateLimited(ip) {
   // Lat rensning så att Map:en inte växer obegränsat.
@@ -118,11 +155,20 @@ function recordLoginFailure(ip) {
   } else {
     rec.count++;
   }
+  if (Date.now() - globalWindowStart > LOGIN_WINDOW_MS) {
+    globalFails = 0;
+    globalWindowStart = Date.now();
+  }
+  globalFails++;
 }
 
 // Healthcheck för Render m.fl. Svarar omedelbart utan att röra annan logik
 // så att portdetekteringen och deploy-health-check alltid lyckas snabbt.
 app.get('/healthz', (_req, res) => res.status(200).type('text/plain').send('ok'));
+
+// Login behöver bara några byte – egen snäv gräns FÖRE den stora parsern nedan,
+// så att man inte kan tära på minnet genom att skicka 60 MB mot /api/login.
+app.use('/api/login', express.json({ limit: '1kb' }));
 
 // JSON-parser för sponsor-uppladdningar (data-URL:er på upp till ~5 MB/st × 10).
 // Sätts före static så att API-rutterna nedan kan läsa req.body.
@@ -133,12 +179,14 @@ app.use(express.json({ limit: '60mb' }));
 app.post('/api/login', (req, res) => {
   if (!AUTH_ENABLED) return res.json({ ok: true });
   const ip = req.ip || 'okänd';
-  if (loginRateLimited(ip)) {
+  if (loginRateLimited(ip) || globalRateLimited()) {
+    console.warn(`[auth] Rate limit – inloggning blockerad från ${ip} kl ${new Date().toISOString()}`);
     return res.status(429).json({ ok: false, error: 'För många försök. Vänta en stund och försök igen.' });
   }
   const { password } = req.body || {};
   if (typeof password !== 'string' || !safeEqual(password, APP_PASSWORD)) {
     recordLoginFailure(ip);
+    console.warn(`[auth] Misslyckad inloggning från ${ip} kl ${new Date().toISOString()}`);
     return res.status(401).json({ ok: false, error: 'Fel lösenord' });
   }
   loginAttempts.delete(ip); // lyckad inloggning → nollställ räknaren
