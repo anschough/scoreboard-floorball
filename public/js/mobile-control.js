@@ -158,6 +158,16 @@ inputClockSet.addEventListener('keydown', (e) => {
 btnPeriodNext .addEventListener('click', () => socket.emit('periodNext'));
 btnPeriodReset.addEventListener('click', () => socket.emit('periodReset'));
 
+// Rensa fel-state direkt när användaren börjar rätta tiden, istället för att
+// vänta ut 1,8s-timern i applyClockSet.
+if (inputClockSet) {
+  inputClockSet.addEventListener('input', () => {
+    inputClockSet.classList.remove('input-error');
+    inputClockSet.removeAttribute('aria-invalid');
+    if (inputClockSetHint) inputClockSetHint.textContent = inputClockSetHintDefault;
+  });
+}
+
 // ── Resultat-synk (IBIS API vs Manuell) ─────────────────────────────────
 // Speglar samma UX som control.html: aktiv toggle, disabled score-knappar
 // i API-mode, och statustext som visar synk-status från servern.
@@ -209,7 +219,9 @@ function renderScoreSyncUI() {
   }
   if (latestScoreSyncStatus && latestScoreSyncStatus.ok) {
     const ts = formatSyncClock(latestScoreSyncStatus.ts);
-    scoreSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    scoreSyncStatus.textContent = ts
+      ? `Synkad ${ts} · uppdateras var 15:e sekund.`
+      : 'Synkad · uppdateras var 15:e sekund.';
     scoreSyncStatus.classList.add('is-ok');
     return;
   }
@@ -221,8 +233,13 @@ function renderScoreSyncUI() {
   scoreSyncStatus.textContent = 'Hämtar från IBIS…';
 }
 
+// Returnerar "HH:MM:SS" för en giltig timestamp, annars null (t.ex. om servern
+// skickar ok-status utan ts). Anroparen får då dölja klockslaget istället för
+// att visa "NaN:NaN:NaN".
 function formatSyncClock(ts) {
+  if (ts == null) return null;
   const d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
@@ -253,12 +270,16 @@ function renderPeriodSyncUI() {
     periodSyncModeEl.dataset.mode = latestPeriodSyncMode;
   }
 
-  const disable = latestPeriodSyncMode === 'api';
+  // IBIS-synk (api): dölj knapparna helt. Manuellt läge: visa dem.
+  const hideManualBtns = latestPeriodSyncMode === 'api';
   [btnPeriodNext, btnPeriodReset].forEach(btn => {
     if (!btn) return;
-    btn.disabled = disable;
-    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+    btn.disabled = hideManualBtns;
+    btn.setAttribute('aria-disabled', hideManualBtns ? 'true' : 'false');
+    btn.style.display = hideManualBtns ? 'none' : '';
   });
+  const periodBtnsRow = btnPeriodNext && btnPeriodNext.closest('.mc-period-btns');
+  if (periodBtnsRow) periodBtnsRow.style.display = hideManualBtns ? 'none' : '';
 
   if (!periodSyncStatus) return;
   periodSyncStatus.classList.remove('is-ok', 'is-error');
@@ -272,7 +293,9 @@ function renderPeriodSyncUI() {
   }
   if (latestPeriodSyncStatus && latestPeriodSyncStatus.ok) {
     const ts = formatSyncClock(latestPeriodSyncStatus.ts);
-    periodSyncStatus.textContent = `Synkad ${ts} · uppdateras var 15:e sekund.`;
+    periodSyncStatus.textContent = ts
+      ? `Synkad ${ts} · uppdateras var 15:e sekund.`
+      : 'Synkad · uppdateras var 15:e sekund.';
     periodSyncStatus.classList.add('is-ok');
     return;
   }
